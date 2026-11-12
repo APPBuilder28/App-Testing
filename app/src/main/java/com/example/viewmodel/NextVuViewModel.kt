@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface CatalogUiState<out T> {
@@ -292,14 +293,21 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private val inFlightEpgIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
     fun fetchChannelEpg(channel: XtreamLiveChannel) {
         val src = activeSource.value ?: return
+        if (!inFlightEpgIds.add(channel.streamId)) return
         viewModelScope.launch {
-            when (val res = mediaRepository.fetchShortEpg(src, channel.streamId)) {
-                is ApiResult.Success -> {
-                    _channelEpgMap.value = _channelEpgMap.value + (channel.streamId to res.data)
+            try {
+                when (val res = mediaRepository.fetchShortEpg(src, channel.streamId)) {
+                    is ApiResult.Success -> {
+                        _channelEpgMap.update { it + (channel.streamId to res.data) }
+                    }
+                    is ApiResult.Failure -> Unit
                 }
-                is ApiResult.Failure -> Unit
+            } finally {
+                inFlightEpgIds.remove(channel.streamId)
             }
         }
     }

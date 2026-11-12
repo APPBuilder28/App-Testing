@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
@@ -245,7 +246,10 @@ fun HomeDashboardScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(recentMovies, key = { it.streamId }) { movie ->
+                                    itemsIndexed(
+                                        recentMovies,
+                                        key = { idx, m -> "rmv_${m.streamId}_$idx" }
+                                    ) { _, movie ->
                                         PosterCard(
                                             title = movie.name,
                                             imageUrl = movie.streamIcon,
@@ -270,7 +274,10 @@ fun HomeDashboardScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(recentSeries, key = { it.seriesId }) { series ->
+                                    itemsIndexed(
+                                        recentSeries,
+                                        key = { idx, s -> "rsr_${s.seriesId}_$idx" }
+                                    ) { _, series ->
                                         PosterCard(
                                             title = series.name,
                                             imageUrl = series.coverUrl,
@@ -421,7 +428,10 @@ private fun GlobalSearchDialog(
                             item {
                                 Text(strings.navLiveTv, style = MaterialTheme.typography.labelLarge, color = ElectricCyan)
                             }
-                            items(matchingChannels, key = { "ch_${it.streamId}" }) { ch ->
+                            itemsIndexed(
+                                matchingChannels,
+                                key = { idx, ch -> "ch_${ch.streamId}_$idx" }
+                            ) { _, ch ->
                                 SearchResultRow(
                                     icon = Icons.Rounded.LiveTv,
                                     title = ch.name,
@@ -435,7 +445,10 @@ private fun GlobalSearchDialog(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(strings.navMovies, style = MaterialTheme.typography.labelLarge, color = ElectricCyan)
                             }
-                            items(matchingMovies, key = { "mv_${it.streamId}" }) { mv ->
+                            itemsIndexed(
+                                matchingMovies,
+                                key = { idx, mv -> "mv_${mv.streamId}_$idx" }
+                            ) { _, mv ->
                                 SearchResultRow(
                                     icon = Icons.Rounded.Movie,
                                     title = mv.name,
@@ -449,7 +462,10 @@ private fun GlobalSearchDialog(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(strings.navSeries, style = MaterialTheme.typography.labelLarge, color = ElectricCyan)
                             }
-                            items(matchingSeries, key = { "sr_${it.seriesId}" }) { sr ->
+                            itemsIndexed(
+                                matchingSeries,
+                                key = { idx, sr -> "sr_${sr.seriesId}_$idx" }
+                            ) { _, sr ->
                                 SearchResultRow(
                                     icon = Icons.Rounded.Tv,
                                     title = sr.name,

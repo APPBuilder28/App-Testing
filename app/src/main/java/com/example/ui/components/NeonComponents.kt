@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +81,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.R
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
@@ -148,7 +150,6 @@ fun NextVuInteractiveCard(
                 }
             }
             .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
             .clip(shape)
             .combinedClickable(
                 onClick = onClick,
@@ -477,8 +478,16 @@ fun PosterCard(
                     .background(SurfaceCardVariant)
             ) {
                 if (imageUrl.isNotBlank()) {
+                    val context = LocalContext.current
+                    val posterRequest = remember(imageUrl) {
+                        ImageRequest.Builder(context)
+                            .data(imageUrl)
+                            .size(360)
+                            .crossfade(false)
+                            .build()
+                    }
                     AsyncImage(
-                        model = imageUrl,
+                        model = posterRequest,
                         contentDescription = title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()

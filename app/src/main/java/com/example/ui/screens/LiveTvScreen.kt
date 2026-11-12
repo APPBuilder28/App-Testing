@@ -21,8 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
@@ -56,11 +56,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
@@ -282,7 +284,10 @@ fun LiveTvScreen(
                                         onClick = { selectedCategoryId = null }
                                     )
                                 }
-                                items(categories, key = { it.categoryId }) { cat ->
+                                itemsIndexed(
+                                    categories,
+                                    key = { idx, cat -> "cat_${cat.categoryId}_$idx" }
+                                ) { _, cat ->
                                     CategorySidebarItem(
                                         label = cat.categoryName,
                                         selected = selectedCategoryId == cat.categoryId,
@@ -317,7 +322,10 @@ fun LiveTvScreen(
                                     .fillMaxSize()
                                     .testTag("live_channel_grid")
                             ) {
-                                items(filteredChannels, key = { it.streamId }) { channel ->
+                                itemsIndexed(
+                                    filteredChannels,
+                                    key = { idx, ch -> "ch_${ch.streamId}_${ch.categoryId}_$idx" }
+                                ) { _, channel ->
                                     val nowProgram = if (showEpgInfo) {
                                         channelEpgMap[channel.streamId]?.firstOrNull { it.isNowPlaying }
                                             ?: channelEpgMap[channel.streamId]?.firstOrNull()
@@ -401,8 +409,16 @@ private fun LiveChannelCard(
                     contentAlignment = Alignment.Center
                 ) {
                     if (channel.streamIcon.isNotBlank()) {
+                        val context = LocalContext.current
+                        val iconRequest = remember(channel.streamIcon) {
+                            ImageRequest.Builder(context)
+                                .data(channel.streamIcon)
+                                .size(144)
+                                .crossfade(false)
+                                .build()
+                        }
                         AsyncImage(
-                            model = channel.streamIcon,
+                            model = iconRequest,
                             contentDescription = channel.name,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier

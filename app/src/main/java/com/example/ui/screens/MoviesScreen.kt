@@ -20,8 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -322,7 +322,10 @@ fun MoviesScreen(
                                 )
                             )
                         }
-                        items(categories, key = { it.categoryId }) { cat ->
+                        itemsIndexed(
+                            categories,
+                            key = { idx, cat -> "mcat_${cat.categoryId}_$idx" }
+                        ) { _, cat ->
                             FilterChip(
                                 selected = selectedCategoryId == cat.categoryId,
                                 onClick = { selectedCategoryId = cat.categoryId },
@@ -357,7 +360,10 @@ fun MoviesScreen(
                                 .fillMaxSize()
                                 .testTag("movies_poster_grid")
                         ) {
-                            items(filtered, key = { it.streamId }) { movie ->
+                            itemsIndexed(
+                                filtered,
+                                key = { idx, movie -> "mv_${movie.streamId}_${movie.categoryId}_$idx" }
+                            ) { _, movie ->
                                 val progress = progressByMovieId[movie.streamId]?.progressFraction
                                 PosterCard(
                                     title = movie.name,
