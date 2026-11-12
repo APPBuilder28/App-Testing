@@ -1,0 +1,6 @@
+{
+  "name": "NextVu Player",
+  "description": "A futuristic media-only IPTV playback client for Android Mobile, Android TV, and Fire Stick with multi-Xtream source management, EPG catch-up, and 4K HEVC/HDR playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
