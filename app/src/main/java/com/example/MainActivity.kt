@@ -370,10 +370,14 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 isRefreshing = isRefreshingLive,
                                 watchlist = watchlist,
                                 channelEpgMap = channelEpgMap,
+                                settings = settings,
+                                isFullScreenPlayerOpen = activePlaybackTarget != null,
+                                buildStreamUrl = { ch -> viewModel.buildLivePreviewUrl(ch) },
                                 onRefresh = { viewModel.refreshLive() },
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
-                                onSelectChannel = { viewModel.playLiveChannel(it) },
+                                onOpenFullScreenPlayer = { viewModel.playLiveChannel(it) },
+                                onPlayCatchUp = { ch, epg -> viewModel.playCatchUpProgram(ch, epg) },
                                 onFetchChannelEpg = { viewModel.fetchChannelEpg(it) },
                                 onToggleFavorite = { ch ->
                                     viewModel.toggleWatchlist(

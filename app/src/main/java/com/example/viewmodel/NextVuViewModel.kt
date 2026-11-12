@@ -372,6 +372,11 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun buildLivePreviewUrl(channel: XtreamLiveChannel, useTsFallback: Boolean = false): String? {
+        val src = activeSource.value ?: return null
+        return mediaRepository.buildLiveUrl(src, channel.streamId, useTsFallback)
+    }
+
     // Playback Launchers
     fun playLiveChannel(channel: XtreamLiveChannel, useTsFallback: Boolean = false) {
         val src = activeSource.value ?: return
