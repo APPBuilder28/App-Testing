@@ -102,6 +102,7 @@ import com.example.data.local.UserSettings
 import com.example.data.remote.XtreamCategory
 import com.example.data.remote.XtreamEpgItem
 import com.example.data.remote.XtreamLiveChannel
+import com.example.player.KeepScreenOnEffect
 import com.example.player.NextVuPlayerController
 import com.example.player.PlayerTelemetryState
 import com.example.ui.theme.BgCharcoal
@@ -264,66 +265,18 @@ fun LiveTvGuideTopBar(
             )
         }
 
-        // Custom sleek pill Search field that scales down cleanly without clipping
-        Surface(
+        // Click-to-edit pill Search field (opens text box & keyboard only when clicked)
+        ClickToEditSearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            placeholder = "Search channels...",
+            height = metrics.toolbarControlHeight,
+            fontSize = metrics.searchTextSp,
+            iconSize = (metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp),
             shape = RoundedCornerShape(22.dp),
-            color = SurfaceCard,
-            border = BorderStroke(1.dp, SurfaceBorderSubtle),
-            modifier = Modifier
-                .weight(1f)
-                .height(metrics.toolbarControlHeight)
-                .testTag("live_search_input")
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Search,
-                    contentDescription = null,
-                    tint = ElectricCyan,
-                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
-                )
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (searchQuery.isEmpty()) {
-                        Text(
-                            text = "Search channels...",
-                            fontSize = metrics.searchTextSp,
-                            color = TextMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    BasicTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchQueryChange,
-                        singleLine = true,
-                        textStyle = TextStyle(
-                            color = TextPrimary,
-                            fontSize = metrics.searchTextSp
-                        ),
-                        cursorBrush = SolidColor(ElectricCyan),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                if (searchQuery.isNotEmpty()) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = "Clear search",
-                        tint = TextSecondary,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clickable { onSearchQueryChange("") }
-                    )
-                }
-            }
-        }
+            testTag = "live_search_input",
+            modifier = Modifier.weight(1f)
+        )
 
         // UI Scale 0-100% Toggle Pill
         Surface(
@@ -753,13 +706,18 @@ fun LiveHeroHeaderSection(
                 .clickable(enabled = focusedChannel != null) { onExpandFullScreen() }
                 .testTag("live_hero_preview_box")
         ) {
+            KeepScreenOnEffect(
+                token = "live_preview",
+                enabled = isLivePreviewActive && previewController != null && previewTelemetry.shouldKeepAwake
+            )
+
             if (isLivePreviewActive && previewController != null) {
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             useController = false
                             player = previewController.exoPlayer
-                            keepScreenOn = true
+                            keepScreenOn = previewTelemetry.shouldKeepAwake
                             layoutParams = FrameLayout.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -769,6 +727,9 @@ fun LiveHeroHeaderSection(
                     update = { view ->
                         if (view.player !== previewController.exoPlayer) {
                             view.player = previewController.exoPlayer
+                        }
+                        if (view.keepScreenOn != previewTelemetry.shouldKeepAwake) {
+                            view.keepScreenOn = previewTelemetry.shouldKeepAwake
                         }
                         view.subtitleView?.let { subView ->
                             subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, settings.subtitleFontSizeSp)
@@ -786,6 +747,7 @@ fun LiveHeroHeaderSection(
                         }
                     },
                     onRelease = { view ->
+                        view.keepScreenOn = false
                         view.player = null
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1204,7 +1166,6 @@ fun LiveEpgGuideChannelRow(
     nowOffsetDp: Dp,
     timelineScrollState: ScrollState,
     onChannelClick: () -> Unit,
-    onProgramClick: (XtreamEpgItem) -> Unit,
     onToggleFavorite: () -> Unit
 ) {
     val windowEndSec = windowStartSec + slotCount * 1800L
@@ -1218,6 +1179,8 @@ fun LiveEpgGuideChannelRow(
             buildTimelineSegments(epgItems, windowStartSec, windowEndSec)
         }
     }
+
+    var isChannelFocused by remember { mutableStateOf(false) }
 
     val rowBg = when {
         isPreviewing -> ElectricCyan.copy(alpha = 0.11f)
@@ -1237,11 +1200,17 @@ fun LiveEpgGuideChannelRow(
                 .height(metrics.guideRowHeight),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Pinned Channel Info Column
+            // Left Pinned Channel Info Column (ONLY the channel is clickable, not the TV guide)
             Row(
                 modifier = Modifier
                     .width(metrics.channelColWidth)
                     .fillMaxHeight()
+                    .background(if (isChannelFocused) ElectricCyan.copy(alpha = 0.18f) else Color.Transparent)
+                    .then(
+                        if (isChannelFocused) Modifier.border(2.dp, ElectricCyan)
+                        else Modifier
+                    )
+                    .onFocusChanged { isChannelFocused = it.isFocused }
                     .clickable { onChannelClick() }
                     .padding(end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1332,7 +1301,6 @@ fun LiveEpgGuideChannelRow(
                                     modifier = Modifier
                                         .width(metrics.slotWidth)
                                         .fillMaxHeight()
-                                        .clickable { onChannelClick() }
                                         .padding(horizontal = 8.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
@@ -1375,9 +1343,6 @@ fun LiveEpgGuideChannelRow(
                                         width = 0.5.dp,
                                         color = SurfaceBorderSubtle.copy(alpha = 0.35f)
                                     )
-                                    .clickable {
-                                        if (epg != null) onProgramClick(epg) else onChannelClick()
-                                    }
                                     .padding(horizontal = 8.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {

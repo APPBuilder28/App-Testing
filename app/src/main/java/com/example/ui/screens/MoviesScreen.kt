@@ -77,6 +77,7 @@ import com.example.data.local.MediaContentType
 import com.example.data.local.PlaybackProgressEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.XtreamMovie
+import com.example.ui.components.ClickToEditSearchBar
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingStateView
@@ -202,23 +203,16 @@ fun MoviesScreen(
                     }
                 }
 
-                // Search & Filters
+                // Search & Filters (text box only opens when clicked)
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text(strings.searchHint) },
-                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = ElectricCyan) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = ElectricCyan,
-                            unfocusedBorderColor = SurfaceBorderSubtle,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("movies_search_input")
+                    ClickToEditSearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        placeholder = strings.searchHint,
+                        height = 50.dp,
+                        shape = RoundedCornerShape(12.dp),
+                        testTag = "movies_search_input",
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))

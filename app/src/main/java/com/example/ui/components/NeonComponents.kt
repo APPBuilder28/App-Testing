@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -29,9 +30,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.ErrorOutline
@@ -57,29 +63,39 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.R
@@ -770,5 +786,183 @@ fun LegalDisclaimerBanner(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
+    }
+}
+
+/**
+ * Search box that stays collapsed as a D-pad/hover-safe trigger until explicitly clicked/pressed,
+ * preventing Fire Stick / Android TV remotes from popping open the text editor & keyboard on focus.
+ */
+@Composable
+fun ClickToEditSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    height: Dp = 48.dp,
+    fontSize: TextUnit = 14.sp,
+    iconSize: Dp = 18.dp,
+    shape: Shape = RoundedCornerShape(14.dp),
+    testTag: String = "search_input"
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var isFocused by remember { mutableStateOf(false) }
+    var editorHadFocus by remember { mutableStateOf(false) }
+    val editorFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    if (isEditing) {
+        BackHandler {
+            isEditing = false
+            keyboardController?.hide()
+        }
+
+        LaunchedEffect(Unit) {
+            editorHadFocus = false
+            withFrameNanos { }
+            try {
+                editorFocusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Throwable) {
+            }
+        }
+
+        Surface(
+            shape = shape,
+            color = SurfaceCard,
+            border = BorderStroke(2.dp, ElectricCyan),
+            modifier = modifier
+                .height(height)
+                .testTag(testTag)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = ElectricCyan,
+                    modifier = Modifier.size(iconSize)
+                )
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            fontSize = fontSize,
+                            color = TextMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = TextPrimary,
+                            fontSize = fontSize
+                        ),
+                        cursorBrush = SolidColor(ElectricCyan),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                keyboardController?.hide()
+                                isEditing = false
+                            },
+                            onDone = {
+                                keyboardController?.hide()
+                                isEditing = false
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(editorFocusRequester)
+                            .onFocusChanged { state ->
+                                if (state.hasFocus) {
+                                    editorHadFocus = true
+                                } else if (editorHadFocus) {
+                                    isEditing = false
+                                    keyboardController?.hide()
+                                }
+                            }
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Clear search",
+                        tint = TextSecondary,
+                        modifier = Modifier
+                            .size(iconSize)
+                            .clickable { onQueryChange("") }
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = "Done searching",
+                    tint = ElectricCyan,
+                    modifier = Modifier
+                        .size(iconSize)
+                        .clickable {
+                            keyboardController?.hide()
+                            isEditing = false
+                        }
+                )
+            }
+        }
+    } else {
+        Surface(
+            onClick = { isEditing = true },
+            shape = shape,
+            color = if (isFocused) SurfaceCardVariant else SurfaceCard,
+            border = BorderStroke(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) ElectricCyan else SurfaceBorderSubtle
+            ),
+            modifier = modifier
+                .height(height)
+                .onFocusChanged { isFocused = it.isFocused }
+                .testTag(testTag)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = placeholder,
+                    tint = ElectricCyan,
+                    modifier = Modifier.size(iconSize)
+                )
+                Text(
+                    text = query.ifEmpty { placeholder },
+                    fontSize = fontSize,
+                    color = if (query.isEmpty()) TextMuted else TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (query.isNotEmpty()) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Clear search",
+                        tint = TextSecondary,
+                        modifier = Modifier
+                            .size(iconSize)
+                            .clickable { onQueryChange("") }
+                    )
+                }
+            }
+        }
     }
 }

@@ -23,10 +23,15 @@ class ContentFiltersTest {
         assertTrue(ContentFilters.isUkPlaylistName("UK_NEWS"))
         assertTrue(ContentFilters.isUkPlaylistName("United Kingdom Cinema"))
         assertTrue(ContentFilters.isUkPlaylistName("U.K. Kids"))
+        assertTrue(ContentFilters.isUkPlaylistName("|4K| Cinema Entertainment"))
+        assertTrue(ContentFilters.isUkPlaylistName("8K Ultra Sports"))
+        assertTrue(ContentFilters.isUkPlaylistName("[UHD] Regional Channels"))
+        assertTrue(ContentFilters.isUkPlaylistName("UK 4K 8K UHD"))
 
         assertFalse(ContentFilters.isUkPlaylistName("Ukraine TV"))
         assertFalse(ContentFilters.isUkPlaylistName("Turkish Drama"))
         assertFalse(ContentFilters.isUkPlaylistName("USA Sports"))
+        assertFalse(ContentFilters.isUkPlaylistName("104K Mix"))
     }
 
     @Test

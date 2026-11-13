@@ -171,7 +171,7 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         emptyResultsSubtitle = "Try adjusting your search or filter criteria, or pull to refresh.",
         regionContentFilters = "Region & Language Filters",
         ukPlaylistsOnly = "UK Live TV Playlists Only",
-        ukPlaylistsOnlyDesc = "Show only Live TV playlists matching UK",
+        ukPlaylistsOnlyDesc = "Show only Live TV playlists matching UK, 4K, 8K, or UHD",
         englishVodOnly = "English / ENG Movies & Series Only",
         englishVodOnlyDesc = "Show only Movies & Series matching English or ENG"
     )
@@ -254,7 +254,7 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         emptyResultsSubtitle = "Prueba cambiando los filtros o desliza para actualizar.",
         regionContentFilters = "Filtros de Región e Idioma",
         ukPlaylistsOnly = "Solo Listas de TV UK",
-        ukPlaylistsOnlyDesc = "Mostrar solo listas de TV en vivo con UK",
+        ukPlaylistsOnlyDesc = "Mostrar solo listas de TV en vivo con UK, 4K, 8K o UHD",
         englishVodOnly = "Solo Películas y Series en English / ENG",
         englishVodOnlyDesc = "Mostrar solo Películas y Series con English o ENG"
     )
@@ -337,7 +337,7 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         emptyResultsSubtitle = "Modifiez vos filtres ou tirez pour actualiser.",
         regionContentFilters = "Filtres de Région et Langue",
         ukPlaylistsOnly = "Listes TV UK Uniquement",
-        ukPlaylistsOnlyDesc = "Afficher uniquement les playlists TV contenant UK",
+        ukPlaylistsOnlyDesc = "Afficher uniquement les playlists TV contenant UK, 4K, 8K ou UHD",
         englishVodOnly = "Films & Séries English / ENG Uniquement",
         englishVodOnlyDesc = "Afficher uniquement les Films et Séries avec English ou ENG"
     )
@@ -420,7 +420,7 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         emptyResultsSubtitle = "Filter anpassen oder zum Aktualisieren ziehen.",
         regionContentFilters = "Regions- & Sprachfilter",
         ukPlaylistsOnly = "Nur UK Live-TV-Playlists",
-        ukPlaylistsOnlyDesc = "Nur Live-TV-Playlists mit UK anzeigen",
+        ukPlaylistsOnlyDesc = "Nur Live-TV-Playlists mit UK, 4K, 8K oder UHD anzeigen",
         englishVodOnly = "Nur English / ENG Filme & Serien",
         englishVodOnlyDesc = "Nur Filme & Serien mit English oder ENG anzeigen"
     )

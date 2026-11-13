@@ -57,6 +57,7 @@ data class MediaTrackInfo(
 
 data class PlayerTelemetryState(
     val isPlaying: Boolean = false,
+    val playWhenReady: Boolean = false,
     val isBuffering: Boolean = true,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
@@ -78,6 +79,9 @@ data class PlayerTelemetryState(
 ) {
     val is4kStream: Boolean
         get() = videoWidth >= 3840 || videoHeight >= 2160
+
+    val shouldKeepAwake: Boolean
+        get() = errorMessage == null && !playbackEnded && (isPlaying || (isBuffering && playWhenReady))
 }
 
 /**
@@ -146,6 +150,7 @@ class NextVuPlayerController(private val context: Context) {
             .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         attachListeners()
@@ -171,6 +176,10 @@ class NextVuPlayerController(private val context: Context) {
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _state.update { it.copy(isPlaying = isPlaying) }
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                _state.update { it.copy(playWhenReady = playWhenReady) }
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -392,6 +401,7 @@ class NextVuPlayerController(private val context: Context) {
                 it.copy(
                     isBuffering = false,
                     isPlaying = false,
+                    playWhenReady = false,
                     errorMessage = null
                 )
             }

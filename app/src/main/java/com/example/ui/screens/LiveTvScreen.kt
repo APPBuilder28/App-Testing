@@ -441,17 +441,6 @@ fun LiveTvScreen(
                                                         focusedEpgItem = epgItems.firstOrNull { it.isNowPlaying } ?: epgItems.firstOrNull()
                                                     }
                                                 },
-                                                onProgramClick = { epg ->
-                                                    val canCatchUp = channel.tvArchive && epg.hasArchive && !epg.isNowPlaying
-                                                    if (canCatchUp) {
-                                                        onPlayCatchUp(channel, epg)
-                                                    } else if (isPreviewing && epg.isNowPlaying) {
-                                                        onOpenFullScreenPlayer(channel)
-                                                    } else {
-                                                        previewChannel = channel
-                                                        focusedEpgItem = epg
-                                                    }
-                                                },
                                                 onToggleFavorite = { onToggleFavorite(channel) }
                                             )
                                         }

@@ -6,7 +6,7 @@ import com.example.viewmodel.SeriesCatalogData
 
 object ContentFilters {
     private val UK_REGEX = Regex(
-        pattern = """(?:^|[^a-zA-Z0-9])(UK|U\.K\.|UNITED[\s._-]+KINGDOM)(?:[^a-zA-Z0-9]|$)""",
+        pattern = """(?:^|[^a-zA-Z0-9])(UK|U\.K\.|UNITED[\s._-]+KINGDOM|4K|8K|UHD)(?:[^a-zA-Z0-9]|$)""",
         option = RegexOption.IGNORE_CASE
     )
 

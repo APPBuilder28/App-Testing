@@ -88,6 +88,7 @@ import com.example.data.remote.XtreamEpisode
 import com.example.data.remote.XtreamLiveChannel
 import com.example.data.remote.XtreamSeries
 import com.example.player.HdrBadgeType
+import com.example.player.KeepScreenOnEffect
 import com.example.player.NextVuPlayerController
 import com.example.ui.components.Player4kWarningDialog
 import com.example.ui.components.PlayerAudioTrackDialog
@@ -321,6 +322,11 @@ fun FullScreenPlayerScreen(
             }
             .testTag("fullscreen_player_screen")
     ) {
+        KeepScreenOnEffect(
+            token = "fullscreen_player",
+            enabled = telemetry.shouldKeepAwake
+        )
+
         // Media3 PlayerView Surface + Customized Subtitles
         AndroidView(
             factory = { ctx ->
@@ -329,7 +335,7 @@ fun FullScreenPlayerScreen(
                     isFocusable = false
                     isFocusableInTouchMode = false
                     player = controller.exoPlayer
-                    keepScreenOn = true
+                    keepScreenOn = telemetry.shouldKeepAwake
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -339,6 +345,9 @@ fun FullScreenPlayerScreen(
             update = { view ->
                 if (view.player !== controller.exoPlayer) {
                     view.player = controller.exoPlayer
+                }
+                if (view.keepScreenOn != telemetry.shouldKeepAwake) {
+                    view.keepScreenOn = telemetry.shouldKeepAwake
                 }
                 view.subtitleView?.let { subView ->
                     subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, settings.subtitleFontSizeSp)
@@ -357,6 +366,7 @@ fun FullScreenPlayerScreen(
                 }
             },
             onRelease = { view ->
+                view.keepScreenOn = false
                 view.player = null
             },
             modifier = Modifier.fillMaxSize()
