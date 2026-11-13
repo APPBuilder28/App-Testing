@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.core.filter.ContentFilters
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
@@ -104,6 +105,7 @@ fun SeriesScreen(
     seriesState: CatalogUiState<SeriesCatalogData>,
     isRefreshing: Boolean,
     watchlist: List<WatchlistEntity>,
+    englishOnly: Boolean,
     onRefresh: () -> Unit,
     onOpenQuickSwitch: () -> Unit,
     onNavigateToSources: () -> Unit,
@@ -158,15 +160,22 @@ fun SeriesScreen(
             )
 
             is CatalogUiState.Success -> {
-                val categories = seriesState.data.categories
-                val availableYears = remember(seriesState.data.series) {
-                    seriesState.data.series.mapNotNull { it.year.takeIf { y -> y.length == 4 } }
+                val effectiveData = remember(seriesState.data, englishOnly) {
+                    ContentFilters.filterSeriesCatalog(seriesState.data, englishOnly)
+                }
+                val categories = effectiveData.categories
+                val availableYears = remember(effectiveData.series) {
+                    effectiveData.series.mapNotNull { it.year.takeIf { y -> y.length == 4 } }
                         .distinct().sortedDescending()
                 }
 
+                val activeCategoryId = selectedCategoryId?.takeIf { sel ->
+                    categories.any { it.categoryId == sel }
+                }
+
                 val filtered = remember(
-                    seriesState.data.series,
-                    selectedCategoryId,
+                    effectiveData.series,
+                    activeCategoryId,
                     selectedYear,
                     minRating,
                     sortOption,
@@ -174,8 +183,8 @@ fun SeriesScreen(
                     favoriteIds,
                     searchQuery
                 ) {
-                    val base = seriesState.data.series.filter { s ->
-                        val catOk = selectedCategoryId == null || s.categoryId == selectedCategoryId
+                    val base = effectiveData.series.filter { s ->
+                        val catOk = activeCategoryId == null || s.categoryId == activeCategoryId
                         val yearOk = selectedYear == null || s.year == selectedYear
                         val ratingOk = s.rating >= minRating
                         val favOk = !favoritesOnly || favoriteIds.contains(s.seriesId)
@@ -308,7 +317,7 @@ fun SeriesScreen(
                     ) {
                         item {
                             FilterChip(
-                                selected = selectedCategoryId == null,
+                                selected = activeCategoryId == null,
                                 onClick = { selectedCategoryId = null },
                                 label = { Text(strings.allCategories) },
                                 colors = FilterChipDefaults.filterChipColors(
@@ -322,7 +331,7 @@ fun SeriesScreen(
                             key = { idx, cat -> "scat_${cat.categoryId}_$idx" }
                         ) { _, cat ->
                             FilterChip(
-                                selected = selectedCategoryId == cat.categoryId,
+                                selected = activeCategoryId == cat.categoryId,
                                 onClick = { selectedCategoryId = cat.categoryId },
                                 label = { Text(cat.categoryName) },
                                 colors = FilterChipDefaults.filterChipColors(

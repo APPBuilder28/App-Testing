@@ -79,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.core.filter.ContentFilters
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
@@ -359,8 +360,18 @@ fun LiveTvScreen(
                 }
 
                 is CatalogUiState.Success -> {
-                    val categories = liveState.data.categories
-                    val allChannels = liveState.data.channels
+                    val effectiveLiveData = remember(liveState.data, settings.ukLivePlaylistsOnly) {
+                        ContentFilters.filterLiveCatalog(liveState.data, settings.ukLivePlaylistsOnly)
+                    }
+                    val categories = effectiveLiveData.categories
+                    val allChannels = effectiveLiveData.channels
+
+                    LaunchedEffect(settings.ukLivePlaylistsOnly, categories) {
+                        val catSel = selectedPlaylist as? LivePlaylistSelection.Category
+                        if (catSel != null && categories.none { it.categoryId == catSel.category.categoryId }) {
+                            selectedPlaylist = null
+                        }
+                    }
 
                     val countsByCategory = remember(allChannels) {
                         allChannels.groupingBy { it.categoryId }.eachCount()

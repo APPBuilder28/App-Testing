@@ -84,7 +84,12 @@ data class AppStrings(
     val noSourceTitle: String,
     val noSourceSubtitle: String,
     val emptyResultsTitle: String,
-    val emptyResultsSubtitle: String
+    val emptyResultsSubtitle: String,
+    val regionContentFilters: String,
+    val ukPlaylistsOnly: String,
+    val ukPlaylistsOnlyDesc: String,
+    val englishVodOnly: String,
+    val englishVodOnlyDesc: String
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {
@@ -163,7 +168,12 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         noSourceTitle = "No Xtream Source Configured",
         noSourceSubtitle = "Add your Xtream API server URL, username, and password to browse your live channels, movies, and series.",
         emptyResultsTitle = "Nothing Found",
-        emptyResultsSubtitle = "Try adjusting your search or filter criteria, or pull to refresh."
+        emptyResultsSubtitle = "Try adjusting your search or filter criteria, or pull to refresh.",
+        regionContentFilters = "Region & Language Filters",
+        ukPlaylistsOnly = "UK Live TV Playlists Only",
+        ukPlaylistsOnlyDesc = "Show only Live TV playlists matching UK",
+        englishVodOnly = "English / ENG Movies & Series Only",
+        englishVodOnlyDesc = "Show only Movies & Series matching English or ENG"
     )
 
     AppLanguage.ES -> AppStrings(
@@ -241,7 +251,12 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         noSourceTitle = "Sin Fuente Xtream Configurada",
         noSourceSubtitle = "Agrega la URL de tu servidor Xtream, usuario y contraseña para comenzar.",
         emptyResultsTitle = "Sin Resultados",
-        emptyResultsSubtitle = "Prueba cambiando los filtros o desliza para actualizar."
+        emptyResultsSubtitle = "Prueba cambiando los filtros o desliza para actualizar.",
+        regionContentFilters = "Filtros de Región e Idioma",
+        ukPlaylistsOnly = "Solo Listas de TV UK",
+        ukPlaylistsOnlyDesc = "Mostrar solo listas de TV en vivo con UK",
+        englishVodOnly = "Solo Películas y Series en English / ENG",
+        englishVodOnlyDesc = "Mostrar solo Películas y Series con English o ENG"
     )
 
     AppLanguage.FR -> AppStrings(
@@ -319,7 +334,12 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         noSourceTitle = "Aucune Source Configurée",
         noSourceSubtitle = "Ajoutez l'URL de votre serveur Xtream, identifiant et mot de passe.",
         emptyResultsTitle = "Aucun Résultat",
-        emptyResultsSubtitle = "Modifiez vos filtres ou tirez pour actualiser."
+        emptyResultsSubtitle = "Modifiez vos filtres ou tirez pour actualiser.",
+        regionContentFilters = "Filtres de Région et Langue",
+        ukPlaylistsOnly = "Listes TV UK Uniquement",
+        ukPlaylistsOnlyDesc = "Afficher uniquement les playlists TV contenant UK",
+        englishVodOnly = "Films & Séries English / ENG Uniquement",
+        englishVodOnlyDesc = "Afficher uniquement les Films et Séries avec English ou ENG"
     )
 
     AppLanguage.DE -> AppStrings(
@@ -397,7 +417,12 @@ fun stringsFor(language: AppLanguage): AppStrings = when (language) {
         noSourceTitle = "Keine Xtream-Quelle Konfiguriert",
         noSourceSubtitle = "Fügen Sie Ihre Xtream Server-URL, Benutzername und Passwort hinzu.",
         emptyResultsTitle = "Nichts Gefunden",
-        emptyResultsSubtitle = "Filter anpassen oder zum Aktualisieren ziehen."
+        emptyResultsSubtitle = "Filter anpassen oder zum Aktualisieren ziehen.",
+        regionContentFilters = "Regions- & Sprachfilter",
+        ukPlaylistsOnly = "Nur UK Live-TV-Playlists",
+        ukPlaylistsOnlyDesc = "Nur Live-TV-Playlists mit UK anzeigen",
+        englishVodOnly = "Nur English / ENG Filme & Serien",
+        englishVodOnlyDesc = "Nur Filme & Serien mit English oder ENG anzeigen"
     )
 }
 

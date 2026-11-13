@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lock
@@ -92,6 +93,8 @@ fun SettingsScreen(
     onSetAutoNextEpisode: (Boolean) -> Unit,
     onSetScreenshotBlocking: (Boolean) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
+    onSetUkLivePlaylistsOnly: (Boolean) -> Unit,
+    onSetEnglishVodOnly: (Boolean) -> Unit,
     onEnableParentalPin: (String) -> Unit,
     onVerifyAndDisableParentalPin: (String) -> Boolean,
     onClearActiveSourceHistory: () -> Unit,
@@ -144,6 +147,26 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+            }
+
+            // Region & Language Content Filters (UK Playlists, English / ENG Movies & Series)
+            item {
+                SettingsCard(icon = Icons.Rounded.FilterList, title = strings.regionContentFilters) {
+                    SettingsToggleRow(
+                        label = strings.ukPlaylistsOnly,
+                        subtitle = strings.ukPlaylistsOnlyDesc,
+                        checked = settings.ukLivePlaylistsOnly,
+                        onCheckedChange = onSetUkLivePlaylistsOnly,
+                        testTag = "settings_uk_playlists_toggle"
+                    )
+                    SettingsToggleRow(
+                        label = strings.englishVodOnly,
+                        subtitle = strings.englishVodOnlyDesc,
+                        checked = settings.englishVodOnly,
+                        onCheckedChange = onSetEnglishVodOnly,
+                        testTag = "settings_english_vod_toggle"
+                    )
                 }
             }
 
@@ -533,7 +556,8 @@ private fun SettingsToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    testTag: String
+    testTag: String,
+    subtitle: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -542,12 +566,24 @@ private fun SettingsToggleRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = TextPrimary,
-            modifier = Modifier.weight(1f)
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextPrimary
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,

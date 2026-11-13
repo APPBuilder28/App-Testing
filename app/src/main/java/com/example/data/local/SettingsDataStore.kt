@@ -36,7 +36,9 @@ data class UserSettings(
     val showBitrateOverlay: Boolean = true,
     val autoNextEpisode: Boolean = true,
     val screenshotBlockingEnabled: Boolean = false,
-    val language: AppLanguage = AppLanguage.EN
+    val language: AppLanguage = AppLanguage.EN,
+    val ukLivePlaylistsOnly: Boolean = false,
+    val englishVodOnly: Boolean = false
 )
 
 class SettingsRepository(private val context: Context) {
@@ -51,6 +53,8 @@ class SettingsRepository(private val context: Context) {
         val AUTO_NEXT_EPISODE = booleanPreferencesKey("auto_next_episode")
         val SCREENSHOT_BLOCKING = booleanPreferencesKey("screenshot_blocking")
         val LANGUAGE = stringPreferencesKey("app_language")
+        val UK_LIVE_PLAYLISTS_ONLY = booleanPreferencesKey("uk_live_playlists_only")
+        val ENGLISH_VOD_ONLY = booleanPreferencesKey("english_vod_only")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -69,7 +73,9 @@ class SettingsRepository(private val context: Context) {
             screenshotBlockingEnabled = prefs[Keys.SCREENSHOT_BLOCKING] ?: false,
             language = prefs[Keys.LANGUAGE]?.let { code ->
                 AppLanguage.entries.firstOrNull { it.code == code }
-            } ?: AppLanguage.EN
+            } ?: AppLanguage.EN,
+            ukLivePlaylistsOnly = prefs[Keys.UK_LIVE_PLAYLISTS_ONLY] ?: false,
+            englishVodOnly = prefs[Keys.ENGLISH_VOD_ONLY] ?: false
         )
     }
 
@@ -107,5 +113,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLanguage(language: AppLanguage) {
         context.settingsDataStore.edit { it[Keys.LANGUAGE] = language.code }
+    }
+
+    suspend fun setUkLivePlaylistsOnly(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.UK_LIVE_PLAYLISTS_ONLY] = enabled }
+    }
+
+    suspend fun setEnglishVodOnly(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.ENGLISH_VOD_ONLY] = enabled }
     }
 }

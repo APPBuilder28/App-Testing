@@ -70,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.core.filter.ContentFilters
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
@@ -103,6 +104,7 @@ fun MoviesScreen(
     isRefreshing: Boolean,
     watchlist: List<WatchlistEntity>,
     progressList: List<PlaybackProgressEntity>,
+    englishOnly: Boolean,
     onRefresh: () -> Unit,
     onOpenQuickSwitch: () -> Unit,
     onNavigateToSources: () -> Unit,
@@ -161,15 +163,22 @@ fun MoviesScreen(
             )
 
             is CatalogUiState.Success -> {
-                val categories = moviesState.data.categories
-                val availableYears = remember(moviesState.data.movies) {
-                    moviesState.data.movies.mapNotNull { it.year.takeIf { y -> y.length == 4 } }
+                val effectiveData = remember(moviesState.data, englishOnly) {
+                    ContentFilters.filterMoviesCatalog(moviesState.data, englishOnly)
+                }
+                val categories = effectiveData.categories
+                val availableYears = remember(effectiveData.movies) {
+                    effectiveData.movies.mapNotNull { it.year.takeIf { y -> y.length == 4 } }
                         .distinct().sortedDescending()
                 }
 
+                val activeCategoryId = selectedCategoryId?.takeIf { sel ->
+                    categories.any { it.categoryId == sel }
+                }
+
                 val filtered = remember(
-                    moviesState.data.movies,
-                    selectedCategoryId,
+                    effectiveData.movies,
+                    activeCategoryId,
                     selectedYear,
                     minRating,
                     sortOption,
@@ -177,8 +186,8 @@ fun MoviesScreen(
                     favoriteIds,
                     searchQuery
                 ) {
-                    val base = moviesState.data.movies.filter { movie ->
-                        val catOk = selectedCategoryId == null || movie.categoryId == selectedCategoryId
+                    val base = effectiveData.movies.filter { movie ->
+                        val catOk = activeCategoryId == null || movie.categoryId == activeCategoryId
                         val yearOk = selectedYear == null || movie.year == selectedYear
                         val ratingOk = movie.rating >= minRating
                         val favOk = !favoritesOnly || favoriteIds.contains(movie.streamId)
@@ -313,7 +322,7 @@ fun MoviesScreen(
                     ) {
                         item {
                             FilterChip(
-                                selected = selectedCategoryId == null,
+                                selected = activeCategoryId == null,
                                 onClick = { selectedCategoryId = null },
                                 label = { Text(strings.allCategories) },
                                 colors = FilterChipDefaults.filterChipColors(
@@ -327,7 +336,7 @@ fun MoviesScreen(
                             key = { idx, cat -> "mcat_${cat.categoryId}_$idx" }
                         ) { _, cat ->
                             FilterChip(
-                                selected = selectedCategoryId == cat.categoryId,
+                                selected = activeCategoryId == cat.categoryId,
                                 onClick = { selectedCategoryId = cat.categoryId },
                                 label = { Text(cat.categoryName) },
                                 colors = FilterChipDefaults.filterChipColors(

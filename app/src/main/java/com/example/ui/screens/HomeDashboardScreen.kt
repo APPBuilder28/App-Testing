@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.core.filter.ContentFilters
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
@@ -85,6 +86,8 @@ fun HomeDashboardScreen(
     liveState: CatalogUiState<LiveCatalogData>,
     moviesState: CatalogUiState<MoviesCatalogData>,
     seriesState: CatalogUiState<SeriesCatalogData>,
+    ukLivePlaylistsOnly: Boolean,
+    englishVodOnly: Boolean,
     onOpenQuickSwitch: () -> Unit,
     onNavigateToSources: () -> Unit,
     onRetryLoad: () -> Unit,
@@ -145,14 +148,28 @@ fun HomeDashboardScreen(
             }
 
             else -> {
-                val recentMovies = (moviesState as? CatalogUiState.Success)
-                    ?.data?.movies
+                val filteredLive = remember(liveState, ukLivePlaylistsOnly) {
+                    (liveState as? CatalogUiState.Success)?.data?.let {
+                        ContentFilters.filterLiveCatalog(it, ukLivePlaylistsOnly)
+                    }
+                }
+                val filteredMovies = remember(moviesState, englishVodOnly) {
+                    (moviesState as? CatalogUiState.Success)?.data?.let {
+                        ContentFilters.filterMoviesCatalog(it, englishVodOnly)
+                    }
+                }
+                val filteredSeries = remember(seriesState, englishVodOnly) {
+                    (seriesState as? CatalogUiState.Success)?.data?.let {
+                        ContentFilters.filterSeriesCatalog(it, englishVodOnly)
+                    }
+                }
+
+                val recentMovies = filteredMovies?.movies
                     ?.sortedByDescending { it.addedTimestamp }
                     ?.take(16)
                     .orEmpty()
 
-                val recentSeries = (seriesState as? CatalogUiState.Success)
-                    ?.data?.series
+                val recentSeries = filteredSeries?.series
                     ?.sortedByDescending { it.lastModified }
                     ?.take(16)
                     .orEmpty()
@@ -297,10 +314,25 @@ fun HomeDashboardScreen(
     }
 
     if (showSearchOverlay) {
+        val searchChannels = remember(liveState, ukLivePlaylistsOnly) {
+            (liveState as? CatalogUiState.Success)?.data?.let {
+                ContentFilters.filterLiveCatalog(it, ukLivePlaylistsOnly).channels
+            }.orEmpty()
+        }
+        val searchMovies = remember(moviesState, englishVodOnly) {
+            (moviesState as? CatalogUiState.Success)?.data?.let {
+                ContentFilters.filterMoviesCatalog(it, englishVodOnly).movies
+            }.orEmpty()
+        }
+        val searchSeries = remember(seriesState, englishVodOnly) {
+            (seriesState as? CatalogUiState.Success)?.data?.let {
+                ContentFilters.filterSeriesCatalog(it, englishVodOnly).series
+            }.orEmpty()
+        }
         GlobalSearchDialog(
-            liveChannels = (liveState as? CatalogUiState.Success)?.data?.channels.orEmpty(),
-            movies = (moviesState as? CatalogUiState.Success)?.data?.movies.orEmpty(),
-            series = (seriesState as? CatalogUiState.Success)?.data?.series.orEmpty(),
+            liveChannels = searchChannels,
+            movies = searchMovies,
+            series = searchSeries,
             onSelectChannel = {
                 showSearchOverlay = false
                 onOpenLiveChannel(it)

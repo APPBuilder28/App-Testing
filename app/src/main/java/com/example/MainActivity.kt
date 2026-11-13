@@ -308,6 +308,8 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 liveState = liveState,
                                 moviesState = moviesState,
                                 seriesState = seriesState,
+                                ukLivePlaylistsOnly = settings.ukLivePlaylistsOnly,
+                                englishVodOnly = settings.englishVodOnly,
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
                                 onRetryLoad = {
@@ -398,6 +400,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 isRefreshing = isRefreshingMovies,
                                 watchlist = watchlist,
                                 progressList = continueWatching,
+                                englishOnly = settings.englishVodOnly,
                                 onRefresh = { viewModel.refreshMovies() },
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
@@ -445,6 +448,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 seriesState = seriesState,
                                 isRefreshing = isRefreshingSeries,
                                 watchlist = watchlist,
+                                englishOnly = settings.englishVodOnly,
                                 onRefresh = { viewModel.refreshSeries() },
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
@@ -537,6 +541,8 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 onSetAutoNextEpisode = { viewModel.setAutoNextEpisode(it) },
                                 onSetScreenshotBlocking = { viewModel.setScreenshotBlocking(it) },
                                 onSetLanguage = { viewModel.setLanguage(it) },
+                                onSetUkLivePlaylistsOnly = { viewModel.setUkLivePlaylistsOnly(it) },
+                                onSetEnglishVodOnly = { viewModel.setEnglishVodOnly(it) },
                                 onEnableParentalPin = { viewModel.enableParentalLock(it) },
                                 onVerifyAndDisableParentalPin = { pin ->
                                     val ok = viewModel.verifyParentalPin(pin)

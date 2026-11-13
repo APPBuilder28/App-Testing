@@ -614,6 +614,14 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
         settingsRepo.setLanguage(language)
     }
 
+    fun setUkLivePlaylistsOnly(enabled: Boolean) = viewModelScope.launch {
+        settingsRepo.setUkLivePlaylistsOnly(enabled)
+    }
+
+    fun setEnglishVodOnly(enabled: Boolean) = viewModelScope.launch {
+        settingsRepo.setEnglishVodOnly(enabled)
+    }
+
     fun hasParentalPin(): Boolean = !secureStorage.getParentalPin().isNullOrBlank()
 
     fun verifyParentalPin(enteredPin: String): Boolean {
