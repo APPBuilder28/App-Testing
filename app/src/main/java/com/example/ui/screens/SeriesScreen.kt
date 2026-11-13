@@ -79,6 +79,8 @@ import com.example.data.remote.XtreamEpisode
 import com.example.data.remote.XtreamSeries
 import com.example.data.remote.XtreamSeriesDetails
 import com.example.ui.components.ClickToEditSearchBar
+import com.example.ui.components.EditPlaylistsChipButton
+import com.example.ui.components.EditPlaylistsDialog
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingStateView
@@ -107,10 +109,12 @@ fun SeriesScreen(
     isRefreshing: Boolean,
     watchlist: List<WatchlistEntity>,
     englishOnly: Boolean,
+    visibleCategoryIds: Set<String>?,
     onRefresh: () -> Unit,
     onOpenQuickSwitch: () -> Unit,
     onNavigateToSources: () -> Unit,
-    onOpenSeriesDetail: (XtreamSeries) -> Unit
+    onOpenSeriesDetail: (XtreamSeries) -> Unit,
+    onSavePlaylistSelection: (allCategoryIds: Set<String>, selectedIds: Set<String>) -> Unit
 ) {
     val strings = LocalAppStrings.current
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
@@ -123,6 +127,7 @@ fun SeriesScreen(
     var showYearMenu by remember { mutableStateOf(false) }
     var showRatingMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showEditPlaylistsDialog by remember { mutableStateOf(false) }
 
     val favoriteIds = remember(watchlist) {
         watchlist.filter { it.contentType == MediaContentType.SERIES.name }.map { it.contentId }.toSet()
@@ -161,8 +166,14 @@ fun SeriesScreen(
             )
 
             is CatalogUiState.Success -> {
-                val effectiveData = remember(seriesState.data, englishOnly) {
+                val baseData = remember(seriesState.data, englishOnly) {
                     ContentFilters.filterSeriesCatalog(seriesState.data, englishOnly)
+                }
+                val baseCountsByCategory = remember(baseData.series) {
+                    baseData.series.groupingBy { it.categoryId }.eachCount()
+                }
+                val effectiveData = remember(baseData, visibleCategoryIds) {
+                    ContentFilters.filterVisibleSeriesPlaylists(baseData, visibleCategoryIds)
                 }
                 val categories = effectiveData.categories
                 val availableYears = remember(effectiveData.series) {
@@ -307,8 +318,20 @@ fun SeriesScreen(
 
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
+                        item(key = "series_edit_playlists") {
+                            EditPlaylistsChipButton(
+                                selectedCount = visibleCategoryIds?.intersect(
+                                    baseData.categories.map { it.categoryId }.toSet()
+                                )?.size ?: baseData.categories.size,
+                                totalCount = baseData.categories.size,
+                                isCustomActive = visibleCategoryIds != null,
+                                onClick = { showEditPlaylistsDialog = true },
+                                testTag = "series_edit_playlists_btn"
+                            )
+                        }
                         item {
                             FilterChip(
                                 selected = activeCategoryId == null,
@@ -345,8 +368,20 @@ fun SeriesScreen(
                     if (filtered.isEmpty()) {
                         EmptyStateView(
                             icon = Icons.Rounded.Tv,
-                            title = strings.emptyResultsTitle,
-                            subtitle = strings.emptyResultsSubtitle
+                            title = if (visibleCategoryIds?.isEmpty() == true) {
+                                "No Playlists Selected"
+                            } else {
+                                strings.emptyResultsTitle
+                            },
+                            subtitle = if (visibleCategoryIds?.isEmpty() == true) {
+                                "You deselected all Series playlists. Tap Edit Playlists to choose playlists to show."
+                            } else {
+                                strings.emptyResultsSubtitle
+                            },
+                            actionLabel = if (baseData.categories.isNotEmpty()) "Edit Playlists" else null,
+                            onAction = if (baseData.categories.isNotEmpty()) {
+                                { showEditPlaylistsDialog = true }
+                            } else null
                         )
                     } else {
                         LazyVerticalGrid(
@@ -374,6 +409,26 @@ fun SeriesScreen(
                             }
                         }
                     }
+                }
+
+                if (showEditPlaylistsDialog) {
+                    EditPlaylistsDialog(
+                        title = "Edit Series Playlists",
+                        categories = baseData.categories,
+                        itemCountsByCategory = baseCountsByCategory,
+                        initialSelectedIds = visibleCategoryIds,
+                        activeGlobalFilterNote = if (englishOnly) {
+                            "Settings filter active: showing English / ENG playlists only."
+                        } else null,
+                        onDismiss = { showEditPlaylistsDialog = false },
+                        onSave = { chosenIds ->
+                            onSavePlaylistSelection(
+                                baseData.categories.map { it.categoryId }.toSet(),
+                                chosenIds
+                            )
+                            showEditPlaylistsDialog = false
+                        }
+                    )
                 }
             }
         }

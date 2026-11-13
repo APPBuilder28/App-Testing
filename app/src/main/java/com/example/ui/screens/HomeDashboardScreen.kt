@@ -89,6 +89,9 @@ fun HomeDashboardScreen(
     seriesState: CatalogUiState<SeriesCatalogData>,
     ukLivePlaylistsOnly: Boolean,
     englishVodOnly: Boolean,
+    visibleLiveCategoryIds: Set<String>?,
+    visibleMovieCategoryIds: Set<String>?,
+    visibleSeriesCategoryIds: Set<String>?,
     onOpenQuickSwitch: () -> Unit,
     onNavigateToSources: () -> Unit,
     onRetryLoad: () -> Unit,
@@ -149,19 +152,22 @@ fun HomeDashboardScreen(
             }
 
             else -> {
-                val filteredLive = remember(liveState, ukLivePlaylistsOnly) {
+                val filteredLive = remember(liveState, ukLivePlaylistsOnly, visibleLiveCategoryIds) {
                     (liveState as? CatalogUiState.Success)?.data?.let {
-                        ContentFilters.filterLiveCatalog(it, ukLivePlaylistsOnly)
+                        val regionFiltered = ContentFilters.filterLiveCatalog(it, ukLivePlaylistsOnly)
+                        ContentFilters.filterVisibleLivePlaylists(regionFiltered, visibleLiveCategoryIds)
                     }
                 }
-                val filteredMovies = remember(moviesState, englishVodOnly) {
+                val filteredMovies = remember(moviesState, englishVodOnly, visibleMovieCategoryIds) {
                     (moviesState as? CatalogUiState.Success)?.data?.let {
-                        ContentFilters.filterMoviesCatalog(it, englishVodOnly)
+                        val langFiltered = ContentFilters.filterMoviesCatalog(it, englishVodOnly)
+                        ContentFilters.filterVisibleMoviesPlaylists(langFiltered, visibleMovieCategoryIds)
                     }
                 }
-                val filteredSeries = remember(seriesState, englishVodOnly) {
+                val filteredSeries = remember(seriesState, englishVodOnly, visibleSeriesCategoryIds) {
                     (seriesState as? CatalogUiState.Success)?.data?.let {
-                        ContentFilters.filterSeriesCatalog(it, englishVodOnly)
+                        val langFiltered = ContentFilters.filterSeriesCatalog(it, englishVodOnly)
+                        ContentFilters.filterVisibleSeriesPlaylists(langFiltered, visibleSeriesCategoryIds)
                     }
                 }
 
@@ -315,19 +321,22 @@ fun HomeDashboardScreen(
     }
 
     if (showSearchOverlay) {
-        val searchChannels = remember(liveState, ukLivePlaylistsOnly) {
+        val searchChannels = remember(liveState, ukLivePlaylistsOnly, visibleLiveCategoryIds) {
             (liveState as? CatalogUiState.Success)?.data?.let {
-                ContentFilters.filterLiveCatalog(it, ukLivePlaylistsOnly).channels
+                val regionFiltered = ContentFilters.filterLiveCatalog(it, ukLivePlaylistsOnly)
+                ContentFilters.filterVisibleLivePlaylists(regionFiltered, visibleLiveCategoryIds).channels
             }.orEmpty()
         }
-        val searchMovies = remember(moviesState, englishVodOnly) {
+        val searchMovies = remember(moviesState, englishVodOnly, visibleMovieCategoryIds) {
             (moviesState as? CatalogUiState.Success)?.data?.let {
-                ContentFilters.filterMoviesCatalog(it, englishVodOnly).movies
+                val langFiltered = ContentFilters.filterMoviesCatalog(it, englishVodOnly)
+                ContentFilters.filterVisibleMoviesPlaylists(langFiltered, visibleMovieCategoryIds).movies
             }.orEmpty()
         }
-        val searchSeries = remember(seriesState, englishVodOnly) {
+        val searchSeries = remember(seriesState, englishVodOnly, visibleSeriesCategoryIds) {
             (seriesState as? CatalogUiState.Success)?.data?.let {
-                ContentFilters.filterSeriesCatalog(it, englishVodOnly).series
+                val langFiltered = ContentFilters.filterSeriesCatalog(it, englishVodOnly)
+                ContentFilters.filterVisibleSeriesPlaylists(langFiltered, visibleSeriesCategoryIds).series
             }.orEmpty()
         }
         GlobalSearchDialog(

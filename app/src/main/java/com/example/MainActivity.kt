@@ -61,6 +61,7 @@ import androidx.navigation.toRoute
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.i18n.stringsFor
 import com.example.data.local.MediaContentType
+import com.example.data.local.PlaylistSection
 import com.example.data.remote.XtreamLiveChannel
 import com.example.data.remote.XtreamMovie
 import com.example.data.remote.XtreamSeries
@@ -310,6 +311,9 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 seriesState = seriesState,
                                 ukLivePlaylistsOnly = settings.ukLivePlaylistsOnly,
                                 englishVodOnly = settings.englishVodOnly,
+                                visibleLiveCategoryIds = settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.LIVE),
+                                visibleMovieCategoryIds = settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.MOVIES),
+                                visibleSeriesCategoryIds = settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.SERIES),
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
                                 onRetryLoad = {
@@ -389,7 +393,10 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                         posterUrl = ch.streamIcon
                                     )
                                 },
-                                onUiScaleChange = { viewModel.setLiveTvUiScalePercent(it) }
+                                onUiScaleChange = { viewModel.setLiveTvUiScalePercent(it) },
+                                onSavePlaylistSelection = { allIds, selectedIds ->
+                                    viewModel.setPlaylistSelection(PlaylistSection.LIVE, allIds, selectedIds)
+                                }
                             )
                         }
 
@@ -402,12 +409,16 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 watchlist = watchlist,
                                 progressList = continueWatching,
                                 englishOnly = settings.englishVodOnly,
+                                visibleCategoryIds = settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.MOVIES),
                                 onRefresh = { viewModel.refreshMovies() },
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
                                 onOpenMovieDetail = { movie ->
                                     viewModel.loadMovieDetail(movie)
                                     navController.navigate(RouteMovieDetail(movie.streamId))
+                                },
+                                onSavePlaylistSelection = { allIds, selectedIds ->
+                                    viewModel.setPlaylistSelection(PlaylistSection.MOVIES, allIds, selectedIds)
                                 }
                             )
                         }
@@ -450,12 +461,16 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 isRefreshing = isRefreshingSeries,
                                 watchlist = watchlist,
                                 englishOnly = settings.englishVodOnly,
+                                visibleCategoryIds = settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.SERIES),
                                 onRefresh = { viewModel.refreshSeries() },
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },
                                 onOpenSeriesDetail = { series ->
                                     viewModel.loadSeriesDetail(series)
                                     navController.navigate(RouteSeriesDetail(series.seriesId))
+                                },
+                                onSavePlaylistSelection = { allIds, selectedIds ->
+                                    viewModel.setPlaylistSelection(PlaylistSection.SERIES, allIds, selectedIds)
                                 }
                             )
                         }

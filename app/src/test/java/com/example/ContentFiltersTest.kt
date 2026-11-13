@@ -105,4 +105,49 @@ class ContentFiltersTest {
         assertEquals(listOf("1"), filteredSeries.categories.map { it.categoryId })
         assertEquals(listOf("200", "202"), filteredSeries.series.map { it.seriesId })
     }
+
+    @Test
+    fun filterVisiblePlaylistsHandlesAllSelectedSubsetAndDeselectAll() {
+        val liveData = LiveCatalogData(
+            categories = listOf(
+                XtreamCategory("1", "UK Sports"),
+                XtreamCategory("2", "UK News"),
+                XtreamCategory("3", "UK Kids")
+            ),
+            channels = listOf(
+                XtreamLiveChannel(streamId = "10", name = "Sky Sports", categoryId = "1"),
+                XtreamLiveChannel(streamId = "20", name = "BBC News", categoryId = "2"),
+                XtreamLiveChannel(streamId = "30", name = "CBBC", categoryId = "3")
+            )
+        )
+        assertEquals(3, ContentFilters.filterVisibleLivePlaylists(liveData, null).categories.size)
+        val liveSubset = ContentFilters.filterVisibleLivePlaylists(liveData, setOf("1", "3"))
+        assertEquals(listOf("1", "3"), liveSubset.categories.map { it.categoryId })
+        assertEquals(listOf("10", "30"), liveSubset.channels.map { it.streamId })
+        val liveNone = ContentFilters.filterVisibleLivePlaylists(liveData, emptySet())
+        assertTrue(liveNone.categories.isEmpty())
+        assertTrue(liveNone.channels.isEmpty())
+
+        val moviesData = MoviesCatalogData(
+            categories = listOf(XtreamCategory("1", "Action"), XtreamCategory("2", "Comedy")),
+            movies = listOf(
+                XtreamMovie(streamId = "100", name = "Movie A", categoryId = "1"),
+                XtreamMovie(streamId = "200", name = "Movie B", categoryId = "2")
+            )
+        )
+        val moviesSubset = ContentFilters.filterVisibleMoviesPlaylists(moviesData, setOf("2"))
+        assertEquals(listOf("2"), moviesSubset.categories.map { it.categoryId })
+        assertEquals(listOf("200"), moviesSubset.movies.map { it.streamId })
+
+        val seriesData = SeriesCatalogData(
+            categories = listOf(XtreamCategory("1", "Drama"), XtreamCategory("2", "Sci-Fi")),
+            series = listOf(
+                XtreamSeries(seriesId = "300", name = "Series A", categoryId = "1"),
+                XtreamSeries(seriesId = "400", name = "Series B", categoryId = "2")
+            )
+        )
+        val seriesSubset = ContentFilters.filterVisibleSeriesPlaylists(seriesData, setOf("1"))
+        assertEquals(listOf("1"), seriesSubset.categories.map { it.categoryId })
+        assertEquals(listOf("300"), seriesSubset.series.map { it.seriesId })
+    }
 }

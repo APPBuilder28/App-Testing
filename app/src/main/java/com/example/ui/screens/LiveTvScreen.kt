@@ -54,12 +54,14 @@ import com.example.core.filter.ContentFilters
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
+import com.example.data.local.PlaylistSection
 import com.example.data.local.UserSettings
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.XtreamEpgItem
 import com.example.data.remote.XtreamLiveChannel
 import com.example.player.NextVuPlayerController
 import com.example.player.PlayerTelemetryState
+import com.example.ui.components.EditPlaylistsDialog
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LiveEpgGuideChannelRow
@@ -101,7 +103,8 @@ fun LiveTvScreen(
     onPlayCatchUp: (XtreamLiveChannel, XtreamEpgItem) -> Unit,
     onFetchChannelEpg: (XtreamLiveChannel) -> Unit,
     onToggleFavorite: (XtreamLiveChannel) -> Unit,
-    onUiScaleChange: (Int) -> Unit
+    onUiScaleChange: (Int) -> Unit,
+    onSavePlaylistSelection: (allCategoryIds: Set<String>, selectedIds: Set<String>) -> Unit
 ) {
     val strings = LocalAppStrings.current
     val context = LocalContext.current
@@ -116,6 +119,7 @@ fun LiveTvScreen(
     var showEpgInfo by remember { mutableStateOf(true) }
     var sidebarExpanded by remember { mutableStateOf(true) }
     var showScalePanel by remember { mutableStateOf(false) }
+    var showEditPlaylistsDialog by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
@@ -194,6 +198,10 @@ fun LiveTvScreen(
             LiveTvUiMetrics.forScale(settings.liveTvUiScalePercent, isCompact)
         }
 
+        val selectedLiveCategoryIds = remember(settings, activeSource?.id) {
+            settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.LIVE)
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
             LiveTvGuideTopBar(
                 title = strings.navLiveTv,
@@ -205,9 +213,11 @@ fun LiveTvScreen(
                 favoritesOnly = favoritesOnly,
                 showEpgInfo = showEpgInfo,
                 showScalePanel = showScalePanel,
+                hasCustomPlaylistFilter = selectedLiveCategoryIds != null,
                 metrics = metrics,
                 isCompact = isCompact,
                 onToggleSidebar = { sidebarExpanded = !sidebarExpanded },
+                onEditPlaylists = { showEditPlaylistsDialog = true },
                 onToggleFavorites = {
                     favoritesOnly = !favoritesOnly
                     if (favoritesOnly) {
@@ -247,13 +257,19 @@ fun LiveTvScreen(
                 }
 
                 is CatalogUiState.Success -> {
-                    val effectiveLiveData = remember(liveState.data, settings.ukLivePlaylistsOnly) {
+                    val baseLiveData = remember(liveState.data, settings.ukLivePlaylistsOnly) {
                         ContentFilters.filterLiveCatalog(liveState.data, settings.ukLivePlaylistsOnly)
+                    }
+                    val baseCountsByCategory = remember(baseLiveData.channels) {
+                        baseLiveData.channels.groupingBy { it.categoryId }.eachCount()
+                    }
+                    val effectiveLiveData = remember(baseLiveData, selectedLiveCategoryIds) {
+                        ContentFilters.filterVisibleLivePlaylists(baseLiveData, selectedLiveCategoryIds)
                     }
                     val categories = effectiveLiveData.categories
                     val allChannels = effectiveLiveData.channels
 
-                    LaunchedEffect(settings.ukLivePlaylistsOnly, categories) {
+                    LaunchedEffect(settings.ukLivePlaylistsOnly, selectedLiveCategoryIds, categories) {
                         val catSel = selectedPlaylist as? LivePlaylistSelection.Category
                         if (catSel != null && categories.none { it.categoryId == catSel.category.categoryId }) {
                             selectedPlaylist = LivePlaylistSelection.All
@@ -342,7 +358,9 @@ fun LiveTvScreen(
                                 favoritesCount = favoritesCount,
                                 countsByCategory = countsByCategory,
                                 selectedPlaylist = selectedPlaylist,
+                                hasCustomPlaylistFilter = selectedLiveCategoryIds != null,
                                 metrics = metrics,
+                                onEditPlaylists = { showEditPlaylistsDialog = true },
                                 onSelectPlaylist = { sel ->
                                     selectedPlaylist = sel
                                     favoritesOnly = sel is LivePlaylistSelection.Favorites
@@ -403,8 +421,20 @@ fun LiveTvScreen(
                                 if (channelsInSelectedPlaylist.isEmpty()) {
                                     EmptyStateView(
                                         icon = Icons.Rounded.LiveTv,
-                                        title = strings.emptyResultsTitle,
-                                        subtitle = strings.emptyResultsSubtitle
+                                        title = if (selectedLiveCategoryIds?.isEmpty() == true) {
+                                            "No Playlists Selected"
+                                        } else {
+                                            strings.emptyResultsTitle
+                                        },
+                                        subtitle = if (selectedLiveCategoryIds?.isEmpty() == true) {
+                                            "You deselected all Live TV playlists. Tap Edit Playlists to choose playlists to show."
+                                        } else {
+                                            strings.emptyResultsSubtitle
+                                        },
+                                        actionLabel = if (baseLiveData.categories.isNotEmpty()) "Edit Playlists" else null,
+                                        onAction = if (baseLiveData.categories.isNotEmpty()) {
+                                            { showEditPlaylistsDialog = true }
+                                        } else null
                                     )
                                 } else {
                                     LazyColumn(
@@ -469,6 +499,35 @@ fun LiveTvScreen(
                 onDismiss = { showScalePanel = false }
             )
         }
+    }
+
+    if (showEditPlaylistsDialog && liveState is CatalogUiState.Success) {
+        val baseLiveData = remember(liveState.data, settings.ukLivePlaylistsOnly) {
+            ContentFilters.filterLiveCatalog(liveState.data, settings.ukLivePlaylistsOnly)
+        }
+        val baseCounts = remember(baseLiveData.channels) {
+            baseLiveData.channels.groupingBy { it.categoryId }.eachCount()
+        }
+        val selectedIds = remember(settings, activeSource?.id) {
+            settings.visibleCategoryIdsFor(activeSource?.id, PlaylistSection.LIVE)
+        }
+        EditPlaylistsDialog(
+            title = "Edit Live TV Playlists",
+            categories = baseLiveData.categories,
+            itemCountsByCategory = baseCounts,
+            initialSelectedIds = selectedIds,
+            activeGlobalFilterNote = if (settings.ukLivePlaylistsOnly) {
+                "Settings filter active: showing UK, 4K, 8K, or UHD playlists only."
+            } else null,
+            onDismiss = { showEditPlaylistsDialog = false },
+            onSave = { chosenIds ->
+                onSavePlaylistSelection(
+                    baseLiveData.categories.map { it.categoryId }.toSet(),
+                    chosenIds
+                )
+                showEditPlaylistsDialog = false
+            }
+        )
     }
 
     if (showAudioDialog) {

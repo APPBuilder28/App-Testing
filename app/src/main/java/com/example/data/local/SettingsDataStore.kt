@@ -10,8 +10,26 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.core.i18n.AppLanguage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 private val Context.settingsDataStore by preferencesDataStore(name = "nextvu_settings")
+
+enum class PlaylistSection(val keySuffix: String) {
+    LIVE("live"),
+    MOVIES("movies"),
+    SERIES("series")
+}
+
+@Serializable
+data class PlaylistSelectionConfig(
+    val isCustomActive: Boolean = false,
+    val selectedCategoryIds: Set<String> = emptySet()
+)
+
+fun playlistSelectionKey(sourceId: String, section: PlaylistSection): String =
+    "${sourceId}::${section.keySuffix}"
 
 enum class VideoQualityPreset(val label: String, val maxHeightPx: Int?) {
     AUTO("Auto", null),
@@ -39,10 +57,26 @@ data class UserSettings(
     val language: AppLanguage = AppLanguage.EN,
     val ukLivePlaylistsOnly: Boolean = false,
     val englishVodOnly: Boolean = false,
-    val liveTvUiScalePercent: Int = 40
-)
+    val liveTvUiScalePercent: Int = 40,
+    val playlistSelections: Map<String, PlaylistSelectionConfig> = emptyMap()
+) {
+    fun playlistSelectionFor(sourceId: String?, section: PlaylistSection): PlaylistSelectionConfig {
+        if (sourceId.isNullOrBlank()) return PlaylistSelectionConfig()
+        return playlistSelections[playlistSelectionKey(sourceId, section)] ?: PlaylistSelectionConfig()
+    }
+
+    fun visibleCategoryIdsFor(sourceId: String?, section: PlaylistSection): Set<String>? {
+        val config = playlistSelectionFor(sourceId, section)
+        return if (config.isCustomActive) config.selectedCategoryIds else null
+    }
+}
 
 class SettingsRepository(private val context: Context) {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     private object Keys {
         val VIDEO_QUALITY = stringPreferencesKey("video_quality")
@@ -57,9 +91,14 @@ class SettingsRepository(private val context: Context) {
         val UK_LIVE_PLAYLISTS_ONLY = booleanPreferencesKey("uk_live_playlists_only")
         val ENGLISH_VOD_ONLY = booleanPreferencesKey("english_vod_only")
         val LIVE_TV_UI_SCALE_PERCENT = intPreferencesKey("live_tv_ui_scale_percent")
+        val PLAYLIST_SELECTIONS_JSON = stringPreferencesKey("playlist_selections_json")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
+        val decodedSelections = prefs[Keys.PLAYLIST_SELECTIONS_JSON]?.takeIf { it.isNotBlank() }?.let { raw ->
+            runCatching { json.decodeFromString<Map<String, PlaylistSelectionConfig>>(raw) }.getOrDefault(emptyMap())
+        } ?: emptyMap()
+
         UserSettings(
             videoQuality = prefs[Keys.VIDEO_QUALITY]?.let { name ->
                 VideoQualityPreset.entries.firstOrNull { it.name == name }
@@ -78,7 +117,8 @@ class SettingsRepository(private val context: Context) {
             } ?: AppLanguage.EN,
             ukLivePlaylistsOnly = prefs[Keys.UK_LIVE_PLAYLISTS_ONLY] ?: false,
             englishVodOnly = prefs[Keys.ENGLISH_VOD_ONLY] ?: false,
-            liveTvUiScalePercent = (prefs[Keys.LIVE_TV_UI_SCALE_PERCENT] ?: 40).coerceIn(0, 100)
+            liveTvUiScalePercent = (prefs[Keys.LIVE_TV_UI_SCALE_PERCENT] ?: 40).coerceIn(0, 100),
+            playlistSelections = decodedSelections
         )
     }
 
@@ -128,5 +168,36 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLiveTvUiScalePercent(percent: Int) {
         context.settingsDataStore.edit { it[Keys.LIVE_TV_UI_SCALE_PERCENT] = percent.coerceIn(0, 100) }
+    }
+
+    suspend fun setPlaylistSelection(
+        sourceId: String,
+        section: PlaylistSection,
+        allCategoryIds: Set<String>,
+        selectedIds: Set<String>
+    ) {
+        if (sourceId.isBlank()) return
+        context.settingsDataStore.edit { prefs ->
+            val currentMap = prefs[Keys.PLAYLIST_SELECTIONS_JSON]?.takeIf { it.isNotBlank() }?.let { raw ->
+                runCatching { json.decodeFromString<Map<String, PlaylistSelectionConfig>>(raw) }.getOrDefault(emptyMap())
+            }?.toMutableMap() ?: mutableMapOf()
+
+            val key = playlistSelectionKey(sourceId, section)
+            val normalizedSelected = selectedIds.intersect(allCategoryIds)
+            if (allCategoryIds.isNotEmpty() && normalizedSelected.size == allCategoryIds.size) {
+                currentMap.remove(key)
+            } else {
+                currentMap[key] = PlaylistSelectionConfig(
+                    isCustomActive = true,
+                    selectedCategoryIds = normalizedSelected
+                )
+            }
+
+            if (currentMap.isEmpty()) {
+                prefs.remove(Keys.PLAYLIST_SELECTIONS_JSON)
+            } else {
+                prefs[Keys.PLAYLIST_SELECTIONS_JSON] = json.encodeToString(currentMap)
+            }
+        }
     }
 }

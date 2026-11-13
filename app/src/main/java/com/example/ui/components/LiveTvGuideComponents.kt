@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ClosedCaption
@@ -223,9 +224,11 @@ fun LiveTvGuideTopBar(
     favoritesOnly: Boolean,
     showEpgInfo: Boolean,
     showScalePanel: Boolean,
+    hasCustomPlaylistFilter: Boolean,
     metrics: LiveTvUiMetrics,
     isCompact: Boolean,
     onToggleSidebar: () -> Unit,
+    onEditPlaylists: () -> Unit,
     onToggleFavorites: () -> Unit,
     onToggleEpg: () -> Unit,
     onToggleScalePanel: () -> Unit,
@@ -279,6 +282,51 @@ fun LiveTvGuideTopBar(
             testTag = "live_search_input",
             modifier = Modifier.weight(1f)
         )
+
+        // Edit Playlists Filter Pill
+        var editPlaylistsFocused by remember { mutableStateOf(false) }
+        Surface(
+            onClick = onEditPlaylists,
+            shape = RoundedCornerShape(10.dp),
+            color = when {
+                editPlaylistsFocused -> ElectricCyan.copy(alpha = 0.24f)
+                hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.18f)
+                else -> SurfaceCard
+            },
+            border = BorderStroke(
+                width = if (editPlaylistsFocused) 2.dp else 1.dp,
+                color = when {
+                    editPlaylistsFocused -> ElectricCyan
+                    hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.72f)
+                    else -> SurfaceBorderSubtle
+                }
+            ),
+            modifier = Modifier
+                .height(metrics.toolbarControlHeight)
+                .onFocusChanged { editPlaylistsFocused = it.isFocused }
+                .testTag("live_edit_playlists_btn")
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = if (isCompact) 7.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Checklist,
+                    contentDescription = "Edit Playlists",
+                    tint = if (editPlaylistsFocused || hasCustomPlaylistFilter) ElectricCyan else TextSecondary,
+                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
+                )
+                if (!isCompact) {
+                    Text(
+                        text = "Playlists",
+                        fontSize = metrics.playlistFontSp,
+                        fontWeight = if (hasCustomPlaylistFilter) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (editPlaylistsFocused || hasCustomPlaylistFilter) ElectricCyan else TextPrimary
+                    )
+                }
+            }
+        }
 
         // UI Scale 0-100% Toggle Pill
         Surface(
@@ -915,9 +963,13 @@ fun LivePlaylistsSidebar(
     favoritesCount: Int,
     countsByCategory: Map<String, Int>,
     selectedPlaylist: LivePlaylistSelection,
+    hasCustomPlaylistFilter: Boolean,
     metrics: LiveTvUiMetrics,
+    onEditPlaylists: () -> Unit,
     onSelectPlaylist: (LivePlaylistSelection) -> Unit
 ) {
+    var editHeaderFocused by remember { mutableStateOf(false) }
+
     Surface(
         color = BgCharcoalElevated,
         border = BorderStroke(1.dp, SurfaceBorderSubtle.copy(alpha = 0.5f)),
@@ -935,17 +987,63 @@ fun LivePlaylistsSidebar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "Playlists",
-                    fontSize = metrics.playlistFontSp,
-                    fontWeight = FontWeight.Bold,
-                    color = ElectricCyan
-                )
-                Text(
-                    text = "${categories.size}",
-                    fontSize = metrics.playlistCountSp,
-                    color = TextMuted
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "Playlists",
+                        fontSize = metrics.playlistFontSp,
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricCyan
+                    )
+                    Text(
+                        text = "(${categories.size})",
+                        fontSize = metrics.playlistCountSp,
+                        color = TextMuted
+                    )
+                }
+
+                Surface(
+                    onClick = onEditPlaylists,
+                    shape = RoundedCornerShape(7.dp),
+                    color = when {
+                        editHeaderFocused -> ElectricCyan.copy(alpha = 0.24f)
+                        hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.18f)
+                        else -> SurfaceCardVariant
+                    },
+                    border = BorderStroke(
+                        width = if (editHeaderFocused) 1.5.dp else 1.dp,
+                        color = when {
+                            editHeaderFocused -> ElectricCyan
+                            hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.72f)
+                            else -> SurfaceBorderSubtle
+                        }
+                    ),
+                    modifier = Modifier
+                        .onFocusChanged { editHeaderFocused = it.isFocused }
+                        .testTag("live_sidebar_edit_playlists_btn")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Checklist,
+                            contentDescription = "Edit Playlists",
+                            tint = if (editHeaderFocused || hasCustomPlaylistFilter) ElectricCyan else TextSecondary,
+                            modifier = Modifier.size(metrics.playlistIconSize)
+                        )
+                        Text(
+                            text = "Edit",
+                            fontSize = metrics.playlistCountSp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (editHeaderFocused || hasCustomPlaylistFilter) ElectricCyan else TextPrimary
+                        )
+                    }
+                }
             }
             HorizontalDivider(color = SurfaceBorderSubtle.copy(alpha = 0.5f))
 

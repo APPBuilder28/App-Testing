@@ -78,6 +78,8 @@ import com.example.data.local.PlaybackProgressEntity
 import com.example.data.local.WatchlistEntity
 import com.example.data.remote.XtreamMovie
 import com.example.ui.components.ClickToEditSearchBar
+import com.example.ui.components.EditPlaylistsChipButton
+import com.example.ui.components.EditPlaylistsDialog
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingStateView
@@ -106,10 +108,12 @@ fun MoviesScreen(
     watchlist: List<WatchlistEntity>,
     progressList: List<PlaybackProgressEntity>,
     englishOnly: Boolean,
+    visibleCategoryIds: Set<String>?,
     onRefresh: () -> Unit,
     onOpenQuickSwitch: () -> Unit,
     onNavigateToSources: () -> Unit,
-    onOpenMovieDetail: (XtreamMovie) -> Unit
+    onOpenMovieDetail: (XtreamMovie) -> Unit,
+    onSavePlaylistSelection: (allCategoryIds: Set<String>, selectedIds: Set<String>) -> Unit
 ) {
     val strings = LocalAppStrings.current
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
@@ -122,6 +126,7 @@ fun MoviesScreen(
     var showYearMenu by remember { mutableStateOf(false) }
     var showRatingMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showEditPlaylistsDialog by remember { mutableStateOf(false) }
 
     val favoriteIds = remember(watchlist) {
         watchlist.filter { it.contentType == MediaContentType.MOVIE.name }.map { it.contentId }.toSet()
@@ -164,8 +169,14 @@ fun MoviesScreen(
             )
 
             is CatalogUiState.Success -> {
-                val effectiveData = remember(moviesState.data, englishOnly) {
+                val baseData = remember(moviesState.data, englishOnly) {
                     ContentFilters.filterMoviesCatalog(moviesState.data, englishOnly)
+                }
+                val baseCountsByCategory = remember(baseData.movies) {
+                    baseData.movies.groupingBy { it.categoryId }.eachCount()
+                }
+                val effectiveData = remember(baseData, visibleCategoryIds) {
+                    ContentFilters.filterVisibleMoviesPlaylists(baseData, visibleCategoryIds)
                 }
                 val categories = effectiveData.categories
                 val availableYears = remember(effectiveData.movies) {
@@ -312,8 +323,20 @@ fun MoviesScreen(
                     // Genre / Category Row
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
+                        item(key = "movies_edit_playlists") {
+                            EditPlaylistsChipButton(
+                                selectedCount = visibleCategoryIds?.intersect(
+                                    baseData.categories.map { it.categoryId }.toSet()
+                                )?.size ?: baseData.categories.size,
+                                totalCount = baseData.categories.size,
+                                isCustomActive = visibleCategoryIds != null,
+                                onClick = { showEditPlaylistsDialog = true },
+                                testTag = "movies_edit_playlists_btn"
+                            )
+                        }
                         item {
                             FilterChip(
                                 selected = activeCategoryId == null,
@@ -350,8 +373,20 @@ fun MoviesScreen(
                     if (filtered.isEmpty()) {
                         EmptyStateView(
                             icon = Icons.Rounded.Movie,
-                            title = strings.emptyResultsTitle,
-                            subtitle = strings.emptyResultsSubtitle
+                            title = if (visibleCategoryIds?.isEmpty() == true) {
+                                "No Playlists Selected"
+                            } else {
+                                strings.emptyResultsTitle
+                            },
+                            subtitle = if (visibleCategoryIds?.isEmpty() == true) {
+                                "You deselected all Movie playlists. Tap Edit Playlists to choose playlists to show."
+                            } else {
+                                strings.emptyResultsSubtitle
+                            },
+                            actionLabel = if (baseData.categories.isNotEmpty()) "Edit Playlists" else null,
+                            onAction = if (baseData.categories.isNotEmpty()) {
+                                { showEditPlaylistsDialog = true }
+                            } else null
                         )
                     } else {
                         LazyVerticalGrid(
@@ -381,6 +416,26 @@ fun MoviesScreen(
                             }
                         }
                     }
+                }
+
+                if (showEditPlaylistsDialog) {
+                    EditPlaylistsDialog(
+                        title = "Edit Movie Playlists",
+                        categories = baseData.categories,
+                        itemCountsByCategory = baseCountsByCategory,
+                        initialSelectedIds = visibleCategoryIds,
+                        activeGlobalFilterNote = if (englishOnly) {
+                            "Settings filter active: showing English / ENG playlists only."
+                        } else null,
+                        onDismiss = { showEditPlaylistsDialog = false },
+                        onSave = { chosenIds ->
+                            onSavePlaylistSelection(
+                                baseData.categories.map { it.categoryId }.toSet(),
+                                chosenIds
+                            )
+                            showEditPlaylistsDialog = false
+                        }
+                    )
                 }
             }
         }

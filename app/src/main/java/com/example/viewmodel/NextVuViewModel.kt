@@ -10,6 +10,7 @@ import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
 import com.example.data.local.NextVuDatabase
 import com.example.data.local.PlaybackProgressEntity
+import com.example.data.local.PlaylistSection
 import com.example.data.local.SettingsRepository
 import com.example.data.local.SubtitleColorOption
 import com.example.data.local.UserSettings
@@ -698,6 +699,22 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setLiveTvUiScalePercent(percent: Int) = viewModelScope.launch {
         settingsRepo.setLiveTvUiScalePercent(percent)
+    }
+
+    fun setPlaylistSelection(
+        section: PlaylistSection,
+        allCategoryIds: Set<String>,
+        selectedIds: Set<String>
+    ) {
+        val srcId = activeSource.value?.id ?: return
+        viewModelScope.launch {
+            settingsRepo.setPlaylistSelection(
+                sourceId = srcId,
+                section = section,
+                allCategoryIds = allCategoryIds,
+                selectedIds = selectedIds
+            )
+        }
     }
 
     fun hasParentalPin(): Boolean = !secureStorage.getParentalPin().isNullOrBlank()

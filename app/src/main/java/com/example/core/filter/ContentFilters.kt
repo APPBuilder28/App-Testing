@@ -83,4 +83,37 @@ object ContentFilters {
         }
         return SeriesCatalogData(categories = effectiveCategories, series = filteredSeries)
     }
+
+    fun filterVisibleLivePlaylists(
+        data: LiveCatalogData,
+        selectedCategoryIds: Set<String>?
+    ): LiveCatalogData {
+        if (selectedCategoryIds == null) return data
+        val visibleCategories = data.categories.filter { selectedCategoryIds.contains(it.categoryId) }
+        val visibleCatIds = visibleCategories.map { it.categoryId }.toSet()
+        val visibleChannels = data.channels.filter { visibleCatIds.contains(it.categoryId) }
+        return LiveCatalogData(categories = visibleCategories, channels = visibleChannels)
+    }
+
+    fun filterVisibleMoviesPlaylists(
+        data: MoviesCatalogData,
+        selectedCategoryIds: Set<String>?
+    ): MoviesCatalogData {
+        if (selectedCategoryIds == null) return data
+        val visibleCategories = data.categories.filter { selectedCategoryIds.contains(it.categoryId) }
+        val visibleCatIds = visibleCategories.map { it.categoryId }.toSet()
+        val visibleMovies = data.movies.filter { visibleCatIds.contains(it.categoryId) }
+        return MoviesCatalogData(categories = visibleCategories, movies = visibleMovies)
+    }
+
+    fun filterVisibleSeriesPlaylists(
+        data: SeriesCatalogData,
+        selectedCategoryIds: Set<String>?
+    ): SeriesCatalogData {
+        if (selectedCategoryIds == null) return data
+        val visibleCategories = data.categories.filter { selectedCategoryIds.contains(it.categoryId) }
+        val visibleCatIds = visibleCategories.map { it.categoryId }.toSet()
+        val visibleSeries = data.series.filter { visibleCatIds.contains(it.categoryId) }
+        return SeriesCatalogData(categories = visibleCategories, series = visibleSeries)
+    }
 }
