@@ -641,6 +641,10 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
         settingsRepo.setEnglishVodOnly(enabled)
     }
 
+    fun setLiveTvUiScalePercent(percent: Int) = viewModelScope.launch {
+        settingsRepo.setLiveTvUiScalePercent(percent)
+    }
+
     fun hasParentalPin(): Boolean = !secureStorage.getParentalPin().isNullOrBlank()
 
     fun verifyParentalPin(enteredPin: String): Boolean {

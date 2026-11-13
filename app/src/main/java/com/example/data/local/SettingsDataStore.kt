@@ -38,7 +38,8 @@ data class UserSettings(
     val screenshotBlockingEnabled: Boolean = false,
     val language: AppLanguage = AppLanguage.EN,
     val ukLivePlaylistsOnly: Boolean = false,
-    val englishVodOnly: Boolean = false
+    val englishVodOnly: Boolean = false,
+    val liveTvUiScalePercent: Int = 40
 )
 
 class SettingsRepository(private val context: Context) {
@@ -55,6 +56,7 @@ class SettingsRepository(private val context: Context) {
         val LANGUAGE = stringPreferencesKey("app_language")
         val UK_LIVE_PLAYLISTS_ONLY = booleanPreferencesKey("uk_live_playlists_only")
         val ENGLISH_VOD_ONLY = booleanPreferencesKey("english_vod_only")
+        val LIVE_TV_UI_SCALE_PERCENT = intPreferencesKey("live_tv_ui_scale_percent")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -75,7 +77,8 @@ class SettingsRepository(private val context: Context) {
                 AppLanguage.entries.firstOrNull { it.code == code }
             } ?: AppLanguage.EN,
             ukLivePlaylistsOnly = prefs[Keys.UK_LIVE_PLAYLISTS_ONLY] ?: false,
-            englishVodOnly = prefs[Keys.ENGLISH_VOD_ONLY] ?: false
+            englishVodOnly = prefs[Keys.ENGLISH_VOD_ONLY] ?: false,
+            liveTvUiScalePercent = (prefs[Keys.LIVE_TV_UI_SCALE_PERCENT] ?: 40).coerceIn(0, 100)
         )
     }
 
@@ -121,5 +124,9 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setEnglishVodOnly(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.ENGLISH_VOD_ONLY] = enabled }
+    }
+
+    suspend fun setLiveTvUiScalePercent(percent: Int) {
+        context.settingsDataStore.edit { it[Keys.LIVE_TV_UI_SCALE_PERCENT] = percent.coerceIn(0, 100) }
     }
 }

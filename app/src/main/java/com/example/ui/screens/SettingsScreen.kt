@@ -95,6 +95,7 @@ fun SettingsScreen(
     onSetLanguage: (AppLanguage) -> Unit,
     onSetUkLivePlaylistsOnly: (Boolean) -> Unit,
     onSetEnglishVodOnly: (Boolean) -> Unit,
+    onSetLiveTvUiScale: (Int) -> Unit,
     onEnableParentalPin: (String) -> Unit,
     onVerifyAndDisableParentalPin: (String) -> Boolean,
     onClearActiveSourceHistory: () -> Unit,
@@ -166,6 +167,24 @@ fun SettingsScreen(
                         checked = settings.englishVodOnly,
                         onCheckedChange = onSetEnglishVodOnly,
                         testTag = "settings_english_vod_toggle"
+                    )
+                }
+            }
+
+            // Live TV UI Scale (0% - 100%)
+            item {
+                SettingsCard(icon = Icons.Rounded.Tune, title = "Live TV UI Scale") {
+                    Text(
+                        text = "Scale: ${settings.liveTvUiScalePercent}% (0% = Compact / More Rows, 100% = Large)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                    Slider(
+                        value = settings.liveTvUiScalePercent.toFloat(),
+                        onValueChange = { onSetLiveTvUiScale(it.toInt().coerceIn(0, 100)) },
+                        valueRange = 0f..100f,
+                        colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan),
+                        modifier = Modifier.testTag("settings_live_ui_scale_slider")
                     )
                 }
             }

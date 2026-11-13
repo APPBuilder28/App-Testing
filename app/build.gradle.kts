@@ -112,6 +112,7 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.hls)
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.media3.common)
+  implementation(libs.nextlib.media3ext)
   implementation(libs.kotlinx.serialization.json)
   // implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

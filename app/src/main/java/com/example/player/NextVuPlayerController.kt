@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.example.data.local.VideoQualityPreset
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,7 +51,8 @@ data class MediaTrackInfo(
     val groupIndex: Int,
     val trackIndex: Int,
     val isSelected: Boolean,
-    val isAc3OrEac3: Boolean = false
+    val isAc3OrEac3: Boolean = false,
+    val isSupported: Boolean = true
 )
 
 data class PlayerTelemetryState(
@@ -118,7 +120,7 @@ class NextVuPlayerController(private val context: Context) {
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(dataSourceFactory)
 
-        val renderersFactory = DefaultRenderersFactory(context)
+        val renderersFactory = NextRenderersFactory(context)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
 
@@ -255,7 +257,12 @@ class NextVuPlayerController(private val context: Context) {
                             MimeTypes.AUDIO_DTS -> "DTS"
                             else -> mime.substringAfter("audio/").uppercase()
                         }
-                        val passthroughNote = if (isAc3 && !isAc3PassthroughSupported) " (PCM Fallback)" else ""
+                        val isSupported = group.isTrackSupported(i)
+                        val passthroughNote = when {
+                            !isSupported -> " (Unsupported)"
+                            isAc3 && !isAc3PassthroughSupported -> " (FFmpeg PCM)"
+                            else -> ""
+                        }
                         val label = buildString {
                             append(fmt.label ?: lang.uppercase())
                             if (codecTag.isNotBlank()) append(" • $codecTag")
@@ -271,7 +278,8 @@ class NextVuPlayerController(private val context: Context) {
                                 groupIndex = groupIndex,
                                 trackIndex = i,
                                 isSelected = group.isTrackSelected(i),
-                                isAc3OrEac3 = isAc3
+                                isAc3OrEac3 = isAc3,
+                                isSupported = isSupported
                             )
                         )
                     }
@@ -417,7 +425,9 @@ class NextVuPlayerController(private val context: Context) {
         try {
             val groups = exoPlayer.currentTracks.groups
             val group = groups.getOrNull(track.groupIndex) ?: return
+            if (!group.isTrackSupported(track.trackIndex)) return
             val params = trackSelector.buildUponParameters()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
                 .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex))
                 .build()
             trackSelector.setParameters(params)

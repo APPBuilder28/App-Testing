@@ -3,10 +3,13 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -64,6 +68,8 @@ import com.example.ui.components.LiveHeroHeaderSection
 import com.example.ui.components.LivePlaylistSelection
 import com.example.ui.components.LivePlaylistsSidebar
 import com.example.ui.components.LiveTvGuideTopBar
+import com.example.ui.components.LiveTvScaleControlPanel
+import com.example.ui.components.LiveTvUiMetrics
 import com.example.ui.components.LoadingStateView
 import com.example.ui.theme.BgCharcoal
 import com.example.ui.theme.ElectricCyan
@@ -94,7 +100,8 @@ fun LiveTvScreen(
     onOpenFullScreenPlayer: (XtreamLiveChannel) -> Unit,
     onPlayCatchUp: (XtreamLiveChannel, XtreamEpgItem) -> Unit,
     onFetchChannelEpg: (XtreamLiveChannel) -> Unit,
-    onToggleFavorite: (XtreamLiveChannel) -> Unit
+    onToggleFavorite: (XtreamLiveChannel) -> Unit,
+    onUiScaleChange: (Int) -> Unit
 ) {
     val strings = LocalAppStrings.current
     val context = LocalContext.current
@@ -108,6 +115,7 @@ fun LiveTvScreen(
     var favoritesOnly by remember { mutableStateOf(false) }
     var showEpgInfo by remember { mutableStateOf(true) }
     var sidebarExpanded by remember { mutableStateOf(true) }
+    var showScalePanel by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
@@ -159,12 +167,16 @@ fun LiveTvScreen(
         }
     }
 
-    BackHandler(enabled = selectedPlaylist !is LivePlaylistSelection.All || searchQuery.isNotBlank()) {
-        if (searchQuery.isNotBlank()) {
-            searchQuery = ""
-        } else {
-            favoritesOnly = false
-            selectedPlaylist = LivePlaylistSelection.All
+    BackHandler(
+        enabled = showScalePanel || selectedPlaylist !is LivePlaylistSelection.All || searchQuery.isNotBlank()
+    ) {
+        when {
+            showScalePanel -> showScalePanel = false
+            searchQuery.isNotBlank() -> searchQuery = ""
+            else -> {
+                favoritesOnly = false
+                selectedPlaylist = LivePlaylistSelection.All
+            }
         }
     }
 
@@ -178,6 +190,9 @@ fun LiveTvScreen(
             .background(BgCharcoal)
     ) {
         val isCompact = maxWidth < 600.dp
+        val metrics = remember(settings.liveTvUiScalePercent, isCompact) {
+            LiveTvUiMetrics.forScale(settings.liveTvUiScalePercent, isCompact)
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             LiveTvGuideTopBar(
@@ -189,6 +204,8 @@ fun LiveTvScreen(
                 sidebarExpanded = sidebarExpanded,
                 favoritesOnly = favoritesOnly,
                 showEpgInfo = showEpgInfo,
+                showScalePanel = showScalePanel,
+                metrics = metrics,
                 isCompact = isCompact,
                 onToggleSidebar = { sidebarExpanded = !sidebarExpanded },
                 onToggleFavorites = {
@@ -200,6 +217,7 @@ fun LiveTvScreen(
                     }
                 },
                 onToggleEpg = { showEpgInfo = !showEpgInfo },
+                onToggleScalePanel = { showScalePanel = !showScalePanel },
                 onOpenQuickSwitch = onOpenQuickSwitch
             )
 
@@ -278,13 +296,14 @@ fun LiveTvScreen(
                         ?: heroEpgList.firstOrNull { it.isNowPlaying }
                         ?: heroEpgList.firstOrNull()
 
-                    // Upper Program Hero + Live Preview Window (matches reference upper band)
+                    // Upper Program Hero + Live Preview Window (scaled 0% - 100%)
                     LiveHeroHeaderSection(
                         focusedChannel = heroChannel,
                         focusedEpg = heroFocusedEpg,
                         nowEpochSec = nowEpochSec,
                         isLivePreviewActive = previewChannel != null && previewController != null && !isFullScreenPlayerOpen,
                         isCompact = isCompact,
+                        metrics = metrics,
                         settings = settings,
                         previewController = previewController,
                         previewTelemetry = previewTelemetry,
@@ -323,7 +342,7 @@ fun LiveTvScreen(
                                 favoritesCount = favoritesCount,
                                 countsByCategory = countsByCategory,
                                 selectedPlaylist = selectedPlaylist,
-                                sidebarWidth = if (isCompact) 134.dp else 196.dp,
+                                metrics = metrics,
                                 onSelectPlaylist = { sel ->
                                     selectedPlaylist = sel
                                     favoritesOnly = sel is LivePlaylistSelection.Favorites
@@ -335,14 +354,11 @@ fun LiveTvScreen(
                         val guideListState = rememberLazyListState()
                         val timelineScrollState = rememberScrollState()
                         val slotCount = 8
-                        val slotWidth = if (isCompact) 118.dp else 148.dp
-                        val channelColWidth = if (isCompact) 130.dp else 204.dp
                         val flooredHalfHourSec = (nowEpochSec / 1800L) * 1800L
                         val windowStartSec = flooredHalfHourSec - 1800L
-                        val dpPerSecond = slotWidth.value / 1800f
+                        val dpPerSecond = metrics.slotWidth.value / 1800f
                         val nowOffsetDp = (((nowEpochSec - windowStartSec).coerceIn(0L, slotCount * 1800L)) * dpPerSecond).dp
 
-                        // Debounced EPG fetch only for currently visible rows
                         val visibleIndices by remember {
                             derivedStateOf {
                                 guideListState.layoutInfo.visibleItemsInfo.map { it.index }
@@ -353,7 +369,7 @@ fun LiveTvScreen(
                                 delay(250L)
                                 visibleIndices
                                     .mapNotNull { channelsInSelectedPlaylist.getOrNull(it) }
-                                    .take(10)
+                                    .take(14)
                                     .forEach { ch ->
                                         if (!channelEpgMap.containsKey(ch.streamId)) {
                                             onFetchChannelEpg(ch)
@@ -371,8 +387,7 @@ fun LiveTvScreen(
                                 nowEpochSec = nowEpochSec,
                                 windowStartSec = windowStartSec,
                                 slotCount = slotCount,
-                                slotWidth = slotWidth,
-                                channelColWidth = channelColWidth,
+                                metrics = metrics,
                                 nowOffsetDp = nowOffsetDp,
                                 timelineScrollState = timelineScrollState
                             )
@@ -413,8 +428,7 @@ fun LiveTvScreen(
                                                 isFavorite = isFav,
                                                 isPreviewing = isPreviewing,
                                                 isSelectedForInfo = heroChannel?.streamId == channel.streamId,
-                                                channelColWidth = channelColWidth,
-                                                slotWidth = slotWidth,
+                                                metrics = metrics,
                                                 slotCount = slotCount,
                                                 windowStartSec = windowStartSec,
                                                 nowOffsetDp = nowOffsetDp,
@@ -448,6 +462,23 @@ fun LiveTvScreen(
                     }
                 }
             }
+        }
+
+        // Floating Real-Time UI Scale Slider Popover (0% - 100%)
+        AnimatedVisibility(
+            visible = showScalePanel,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = metrics.toolbarControlHeight + metrics.topBarVerticalPad * 2 + 4.dp, end = 12.dp)
+        ) {
+            LiveTvScaleControlPanel(
+                scalePercent = settings.liveTvUiScalePercent,
+                onScaleChange = onUiScaleChange,
+                onDismiss = { showScalePanel = false }
+            )
         }
     }
 

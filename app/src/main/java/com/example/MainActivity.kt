@@ -388,7 +388,8 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                         title = ch.name,
                                         posterUrl = ch.streamIcon
                                     )
-                                }
+                                },
+                                onUiScaleChange = { viewModel.setLiveTvUiScalePercent(it) }
                             )
                         }
 
@@ -543,6 +544,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 onSetLanguage = { viewModel.setLanguage(it) },
                                 onSetUkLivePlaylistsOnly = { viewModel.setUkLivePlaylistsOnly(it) },
                                 onSetEnglishVodOnly = { viewModel.setEnglishVodOnly(it) },
+                                onSetLiveTvUiScale = { viewModel.setLiveTvUiScalePercent(it) },
                                 onEnableParentalPin = { viewModel.enableParentalLock(it) },
                                 onVerifyAndDisableParentalPin = { pin ->
                                     val ok = viewModel.verifyParentalPin(pin)

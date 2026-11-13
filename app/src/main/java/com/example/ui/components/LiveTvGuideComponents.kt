@@ -22,16 +22,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Bookmark
@@ -51,19 +52,22 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -71,13 +75,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.CaptionStyleCompat
@@ -105,6 +114,7 @@ import com.example.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 sealed class LivePlaylistSelection {
     data object All : LivePlaylistSelection()
@@ -118,6 +128,83 @@ data class TimelineSegment(
     val epgItem: XtreamEpgItem?
 )
 
+data class LiveTvUiMetrics(
+    val scalePercent: Int,
+    val topBarVerticalPad: Dp,
+    val toolbarControlHeight: Dp,
+    val searchTextSp: TextUnit,
+    val heroVerticalPad: Dp,
+    val heroLogoSize: Dp,
+    val heroTitleSp: TextUnit,
+    val heroProgramSp: TextUnit,
+    val heroDescSp: TextUnit,
+    val heroDescLineHeightSp: TextUnit,
+    val heroDescMaxLines: Int,
+    val heroProgressWidth: Dp,
+    val previewWidth: Dp,
+    val previewControlSize: Dp,
+    val sidebarWidth: Dp,
+    val playlistHeaderPad: Dp,
+    val playlistRowPadV: Dp,
+    val playlistFontSp: TextUnit,
+    val playlistCountSp: TextUnit,
+    val playlistIconSize: Dp,
+    val timelineHeaderHeight: Dp,
+    val timelineHeaderSp: TextUnit,
+    val channelColWidth: Dp,
+    val guideRowHeight: Dp,
+    val guideLogoSize: Dp,
+    val guideChannelSp: TextUnit,
+    val guideProgramSp: TextUnit,
+    val slotWidth: Dp
+) {
+    companion object {
+        fun forScale(scalePercent: Int, isCompact: Boolean): LiveTvUiMetrics {
+            val clamped = scalePercent.coerceIn(0, 100)
+            val t = clamped / 100f
+            val descLines = when {
+                clamped <= 25 -> 1
+                clamped <= 70 -> 2
+                else -> 3
+            }
+            return LiveTvUiMetrics(
+                scalePercent = clamped,
+                topBarVerticalPad = lerp(2.dp, 8.dp, t),
+                toolbarControlHeight = lerp(32.dp, 46.dp, t),
+                searchTextSp = lerpSp(11.sp, 14.sp, t),
+                heroVerticalPad = lerp(2.dp, 8.dp, t),
+                heroLogoSize = lerp(22.dp, 44.dp, t),
+                heroTitleSp = lerpSp(13.sp, 21.sp, t),
+                heroProgramSp = lerpSp(10.sp, 14.sp, t),
+                heroDescSp = lerpSp(9.5.sp, 13.sp, t),
+                heroDescLineHeightSp = lerpSp(12.sp, 17.sp, t),
+                heroDescMaxLines = descLines,
+                heroProgressWidth = lerp(48.dp, 110.dp, t),
+                previewWidth = if (isCompact) lerp(94.dp, 160.dp, t) else lerp(116.dp, 260.dp, t),
+                previewControlSize = lerp(20.dp, 30.dp, t),
+                sidebarWidth = if (isCompact) lerp(102.dp, 156.dp, t) else lerp(136.dp, 216.dp, t),
+                playlistHeaderPad = lerp(5.dp, 10.dp, t),
+                playlistRowPadV = lerp(3.dp, 9.dp, t),
+                playlistFontSp = lerpSp(10.sp, 13.sp, t),
+                playlistCountSp = lerpSp(9.sp, 11.sp, t),
+                playlistIconSize = lerp(12.dp, 16.dp, t),
+                timelineHeaderHeight = lerp(24.dp, 40.dp, t),
+                timelineHeaderSp = lerpSp(9.5.sp, 13.sp, t),
+                channelColWidth = if (isCompact) lerp(96.dp, 148.dp, t) else lerp(140.dp, 220.dp, t),
+                guideRowHeight = lerp(34.dp, 62.dp, t),
+                guideLogoSize = lerp(20.dp, 36.dp, t),
+                guideChannelSp = lerpSp(10.5.sp, 14.5.sp, t),
+                guideProgramSp = lerpSp(10.sp, 14.sp, t),
+                slotWidth = lerp(90.dp, 156.dp, t)
+            )
+        }
+
+        private fun lerpSp(start: TextUnit, stop: TextUnit, fraction: Float): TextUnit {
+            return (start.value + (stop.value - start.value) * fraction).sp
+        }
+    }
+}
+
 @Composable
 fun LiveTvGuideTopBar(
     title: String,
@@ -128,109 +215,173 @@ fun LiveTvGuideTopBar(
     sidebarExpanded: Boolean,
     favoritesOnly: Boolean,
     showEpgInfo: Boolean,
+    showScalePanel: Boolean,
+    metrics: LiveTvUiMetrics,
     isCompact: Boolean,
     onToggleSidebar: () -> Unit,
     onToggleFavorites: () -> Unit,
     onToggleEpg: () -> Unit,
+    onToggleScalePanel: () -> Unit,
     onOpenQuickSwitch: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = metrics.topBarVerticalPad),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        IconButton(
+        Surface(
             onClick = onToggleSidebar,
+            shape = RoundedCornerShape(10.dp),
+            color = if (sidebarExpanded) ElectricCyan.copy(alpha = 0.16f) else SurfaceCardVariant,
             modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (sidebarExpanded) ElectricCyan.copy(alpha = 0.16f) else SurfaceCardVariant)
+                .size(metrics.toolbarControlHeight)
                 .testTag("toggle_live_sidebar_btn")
         ) {
-            Icon(
-                imageVector = if (sidebarExpanded) Icons.Rounded.ChevronLeft else Icons.Rounded.MenuOpen,
-                contentDescription = "Playlists",
-                tint = ElectricCyan
-            )
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = if (sidebarExpanded) Icons.Rounded.ChevronLeft else Icons.Rounded.MenuOpen,
+                    contentDescription = "Playlists",
+                    tint = ElectricCyan,
+                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.52f).coerceAtLeast(16.dp))
+                )
+            }
         }
 
         if (!isCompact) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
+                fontSize = metrics.heroTitleSp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
                 maxLines = 1
             )
         }
 
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            placeholder = {
-                Text(
-                    text = "Search channels...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            leadingIcon = {
+        // Custom sleek pill Search field that scales down cleanly without clipping
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = SurfaceCard,
+            border = BorderStroke(1.dp, SurfaceBorderSubtle),
+            modifier = Modifier
+                .weight(1f)
+                .height(metrics.toolbarControlHeight)
+                .testTag("live_search_input")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = null,
                     tint = ElectricCyan,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
                 )
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(24.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SurfaceCard,
-                unfocusedContainerColor = SurfaceCard,
-                focusedBorderColor = ElectricCyan.copy(alpha = 0.7f),
-                unfocusedBorderColor = SurfaceBorderSubtle,
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (searchQuery.isEmpty()) {
+                        Text(
+                            text = "Search channels...",
+                            fontSize = metrics.searchTextSp,
+                            color = TextMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = TextPrimary,
+                            fontSize = metrics.searchTextSp
+                        ),
+                        cursorBrush = SolidColor(ElectricCyan),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (searchQuery.isNotEmpty()) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Clear search",
+                        tint = TextSecondary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable { onSearchQueryChange("") }
+                    )
+                }
+            }
+        }
+
+        // UI Scale 0-100% Toggle Pill
+        Surface(
+            onClick = onToggleScalePanel,
+            shape = RoundedCornerShape(10.dp),
+            color = if (showScalePanel) ElectricCyan.copy(alpha = 0.2f) else SurfaceCard,
+            border = BorderStroke(
+                1.dp,
+                if (showScalePanel) ElectricCyan else SurfaceBorderSubtle
             ),
             modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 48.dp)
-                .testTag("live_search_input")
-        )
+                .height(metrics.toolbarControlHeight)
+                .testTag("live_ui_scale_btn")
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Tune,
+                    contentDescription = "UI Scale",
+                    tint = ElectricCyan,
+                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
+                )
+                Text(
+                    text = "${metrics.scalePercent}%",
+                    fontSize = metrics.playlistFontSp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ElectricCyan
+                )
+            }
+        }
 
         // Compact Favorites Toggle
         Surface(
             onClick = onToggleFavorites,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(10.dp),
             color = if (favoritesOnly) ElectricCyan.copy(alpha = 0.18f) else SurfaceCard,
             border = BorderStroke(
                 1.dp,
                 if (favoritesOnly) ElectricCyan.copy(alpha = 0.7f) else SurfaceBorderSubtle
             ),
             modifier = Modifier
-                .minimumInteractiveComponentSize()
+                .height(metrics.toolbarControlHeight)
                 .testTag("live_favorites_filter")
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = if (isCompact) 10.dp else 12.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = if (isCompact) 8.dp else 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = if (favoritesOnly) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
                     contentDescription = "Favorites",
                     tint = if (favoritesOnly) ElectricCyan else TextSecondary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
                 )
                 if (!isCompact) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Fav",
-                        style = MaterialTheme.typography.labelLarge,
+                        fontSize = metrics.playlistFontSp,
                         color = if (favoritesOnly) ElectricCyan else TextSecondary
                     )
                 }
@@ -240,38 +391,38 @@ fun LiveTvGuideTopBar(
         // EPG Toggle Pill
         Surface(
             onClick = onToggleEpg,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(10.dp),
             color = if (showEpgInfo) DeepViolet.copy(alpha = 0.30f) else SurfaceCard,
             border = BorderStroke(
                 1.dp,
                 if (showEpgInfo) ElectricCyan.copy(alpha = 0.55f) else SurfaceBorderSubtle
             ),
             modifier = Modifier
-                .minimumInteractiveComponentSize()
+                .height(metrics.toolbarControlHeight)
                 .testTag("live_epg_toggle")
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = if (isCompact) 10.dp else 12.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = if (isCompact) 8.dp else 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Schedule,
                     contentDescription = "EPG",
                     tint = if (showEpgInfo) ElectricCyan else TextSecondary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
                 )
                 if (!isCompact) {
-                    Spacer(modifier = Modifier.width(5.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "EPG",
-                        style = MaterialTheme.typography.labelLarge,
+                        fontSize = metrics.playlistFontSp,
                         color = TextPrimary
                     )
                 }
             }
         }
 
-        // Active Source Selector Pill (matches reference top-right pill)
+        // Active Source Selector Pill
         if (activeSource != null) {
             Surface(
                 onClick = onOpenQuickSwitch,
@@ -282,24 +433,24 @@ fun LiveTvGuideTopBar(
                     if (isOfflineMode) ErrorRose.copy(alpha = 0.7f) else SurfaceBorderSubtle
                 ),
                 modifier = Modifier
-                    .minimumInteractiveComponentSize()
+                    .height(metrics.toolbarControlHeight)
                     .testTag("live_source_pill")
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
                             .background(if (isOfflineMode) ErrorRose else ElectricCyan)
                     )
                     if (!isCompact) {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = activeSource.sourceName,
-                            style = MaterialTheme.typography.labelLarge,
+                            fontSize = metrics.playlistFontSp,
                             color = TextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -310,15 +461,97 @@ fun LiveTvGuideTopBar(
                             imageVector = Icons.Rounded.Dns,
                             contentDescription = activeSource.sourceName,
                             tint = ElectricCyan,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowDown,
                         contentDescription = "Switch source",
                         tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveTvScaleControlPanel(
+    scalePercent: Int,
+    onScaleChange: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = BgCharcoalElevated.copy(alpha = 0.98f),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.2.dp, ElectricCyan.copy(alpha = 0.65f)),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .widthIn(min = 260.dp, max = 360.dp)
+            .testTag("live_ui_scale_panel")
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Live TV UI Scale",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = "$scalePercent%",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = ElectricCyan
+                )
+            }
+
+            Slider(
+                value = scalePercent.toFloat(),
+                onValueChange = { onScaleChange(it.roundToInt().coerceIn(0, 100)) },
+                valueRange = 0f..100f,
+                colors = SliderDefaults.colors(
+                    thumbColor = ElectricCyan,
+                    activeTrackColor = ElectricCyan,
+                    inactiveTrackColor = SurfaceCardVariant
+                ),
+                modifier = Modifier.testTag("live_ui_scale_slider")
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf(0, 25, 50, 75, 100).forEach { preset ->
+                        FilterChip(
+                            selected = scalePercent == preset,
+                            onClick = { onScaleChange(preset) },
+                            label = {
+                                Text(
+                                    text = "$preset%",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = ElectricCyan.copy(alpha = 0.22f),
+                                selectedLabelColor = ElectricCyan
+                            )
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Done", color = ElectricCyan)
                 }
             }
         }
@@ -333,6 +566,7 @@ fun LiveHeroHeaderSection(
     nowEpochSec: Long,
     isLivePreviewActive: Boolean,
     isCompact: Boolean,
+    metrics: LiveTvUiMetrics,
     settings: UserSettings,
     previewController: NextVuPlayerController?,
     previewTelemetry: PlayerTelemetryState,
@@ -360,22 +594,22 @@ fun LiveHeroHeaderSection(
     }
     val descriptionText = focusedEpg?.description?.takeIf { it.isNotBlank() }
         ?: if (focusedChannel != null) {
-            "Streaming ${focusedChannel.name}. Tap the preview window or tap the channel again to launch full-screen playback."
+            "Streaming ${focusedChannel.name}. Tap preview or channel to launch full-screen."
         } else {
-            "Select a playlist on the left and tap any channel row in the TV guide below to preview its stream and program schedule."
+            "Select a playlist on the left and tap any channel in the TV guide below to preview."
         }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(horizontal = 10.dp, vertical = metrics.heroVerticalPad),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Left: Channel Header + Progress + EPG Title & Description
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy((metrics.heroVerticalPad * 0.6f).coerceAtLeast(2.dp))
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -388,10 +622,10 @@ fun LiveHeroHeaderSection(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(if (isCompact) 36.dp else 44.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .size(metrics.heroLogoSize)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(SurfaceCardVariant)
-                            .border(1.dp, ElectricCyan.copy(alpha = 0.55f), RoundedCornerShape(10.dp)),
+                            .border(1.dp, ElectricCyan.copy(alpha = 0.55f), RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         val iconUrl = focusedChannel?.streamIcon.orEmpty()
@@ -410,23 +644,23 @@ fun LiveHeroHeaderSection(
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(4.dp)
+                                    .padding(3.dp)
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Rounded.LiveTv,
                                 contentDescription = channelTitle,
                                 tint = ElectricCyan,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size((metrics.heroLogoSize * 0.55f).coerceAtLeast(14.dp))
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
                         text = channelTitle,
-                        style = if (isCompact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+                        fontSize = metrics.heroTitleSp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
                         maxLines = 1,
@@ -434,10 +668,10 @@ fun LiveHeroHeaderSection(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = if (isLivePreviewActive) ElectricCyan.copy(alpha = 0.14f) else SurfaceCard,
                     border = BorderStroke(
                         1.dp,
@@ -445,19 +679,19 @@ fun LiveHeroHeaderSection(
                     )
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(7.dp)
+                                .size(6.dp)
                                 .clip(CircleShape)
                                 .background(if (isLivePreviewActive) ElectricCyan else TextMuted)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = if (isLivePreviewActive) "Live" else "Guide",
-                            style = MaterialTheme.typography.labelMedium,
+                            fontSize = metrics.playlistCountSp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (isLivePreviewActive) TextPrimary else TextSecondary
                         )
@@ -467,7 +701,7 @@ fun LiveHeroHeaderSection(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 LinearProgressIndicator(
@@ -475,13 +709,14 @@ fun LiveHeroHeaderSection(
                     color = ElectricCyan,
                     trackColor = SurfaceCardVariant,
                     modifier = Modifier
-                        .width(if (isCompact) 76.dp else 110.dp)
+                        .width(metrics.heroProgressWidth)
                         .height(3.dp)
                         .clip(RoundedCornerShape(2.dp))
                 )
                 Text(
                     text = programHeader,
-                    style = MaterialTheme.typography.labelLarge,
+                    fontSize = metrics.heroProgramSp,
+                    fontWeight = FontWeight.Medium,
                     color = if (focusedEpg != null) ElectricCyan else TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -491,25 +726,25 @@ fun LiveHeroHeaderSection(
 
             Text(
                 text = descriptionText,
-                style = MaterialTheme.typography.bodySmall,
+                fontSize = metrics.heroDescSp,
+                lineHeight = metrics.heroDescLineHeightSp,
                 color = TextSecondary,
-                maxLines = if (isCompact) 2 else 3,
+                maxLines = metrics.heroDescMaxLines,
                 overflow = TextOverflow.Ellipsis
             )
         }
 
-        // Right: Live Preview Video Window (16:9)
-        val previewWidth = if (isCompact) 146.dp else 252.dp
+        // Right: Scaled 16:9 Live Preview Video Window
         Box(
             modifier = Modifier
-                .width(previewWidth)
+                .width(metrics.previewWidth)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color.Black)
                 .border(
                     1.2.dp,
                     if (isLivePreviewActive) ElectricCyan.copy(alpha = 0.75f) else SurfaceBorderSubtle,
-                    RoundedCornerShape(12.dp)
+                    RoundedCornerShape(10.dp)
                 )
                 .clickable(enabled = focusedChannel != null) { onExpandFullScreen() }
                 .testTag("live_hero_preview_box")
@@ -557,8 +792,8 @@ fun LiveHeroHeaderSection(
                         color = ElectricCyan,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(26.dp),
-                        strokeWidth = 2.5.dp
+                            .size(22.dp),
+                        strokeWidth = 2.dp
                     )
                 }
 
@@ -567,12 +802,12 @@ fun LiveHeroHeaderSection(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(BgCharcoal.copy(alpha = 0.85f))
-                            .padding(6.dp),
+                            .padding(4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = previewTelemetry.errorMessage ?: "Stream error",
-                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = metrics.playlistCountSp,
                             color = ErrorRose,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -597,47 +832,47 @@ fun LiveHeroHeaderSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
                             onClick = onTogglePlayPause,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(metrics.previewControlSize)
                         ) {
                             Icon(
                                 imageVector = if (previewTelemetry.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 contentDescription = "Play/Pause",
                                 tint = ElectricCyan,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size((metrics.previewControlSize * 0.65f).coerceAtLeast(13.dp))
                             )
                         }
                         IconButton(
                             onClick = onToggleMute,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(metrics.previewControlSize)
                         ) {
                             Icon(
                                 imageVector = if (previewTelemetry.volume <= 0.01f) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
                                 contentDescription = "Mute",
                                 tint = TextPrimary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size((metrics.previewControlSize * 0.6f).coerceAtLeast(12.dp))
                             )
                         }
-                        if (!isCompact) {
+                        if (!isCompact && metrics.scalePercent >= 25) {
                             IconButton(
                                 onClick = onOpenAudioDialog,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(metrics.previewControlSize)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Audiotrack,
                                     contentDescription = "Audio",
                                     tint = TextSecondary,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size((metrics.previewControlSize * 0.55f).coerceAtLeast(12.dp))
                                 )
                             }
                             IconButton(
                                 onClick = onOpenSubtitleDialog,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(metrics.previewControlSize)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.ClosedCaption,
                                     contentDescription = "Subtitles",
                                     tint = TextSecondary,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size((metrics.previewControlSize * 0.55f).coerceAtLeast(12.dp))
                                 )
                             }
                         }
@@ -647,27 +882,27 @@ fun LiveHeroHeaderSection(
                         IconButton(
                             onClick = onExpandFullScreen,
                             modifier = Modifier
-                                .size(30.dp)
+                                .size(metrics.previewControlSize)
                                 .testTag("embedded_player_fullscreen_btn")
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Fullscreen,
                                 contentDescription = "Fullscreen",
                                 tint = ElectricCyan,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size((metrics.previewControlSize * 0.65f).coerceAtLeast(13.dp))
                             )
                         }
                         IconButton(
                             onClick = onClosePreview,
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(metrics.previewControlSize)
                                 .testTag("embedded_player_close_btn")
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
                                 contentDescription = "Close Preview",
                                 tint = TextSecondary,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size((metrics.previewControlSize * 0.6f).coerceAtLeast(12.dp))
                             )
                         }
                     }
@@ -685,17 +920,17 @@ fun LiveHeroHeaderSection(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = "Preview",
                             tint = ElectricCyan,
-                            modifier = Modifier.size(if (isCompact) 24.dp else 32.dp)
+                            modifier = Modifier.size(if (isCompact) 20.dp else 26.dp)
                         )
                         Text(
-                            text = if (focusedChannel != null) "Tap to Watch" else "Channel Preview",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = if (focusedChannel != null) "Tap to Watch" else "Preview",
+                            fontSize = metrics.playlistCountSp,
                             color = TextSecondary
                         )
                     }
@@ -712,14 +947,14 @@ fun LivePlaylistsSidebar(
     favoritesCount: Int,
     countsByCategory: Map<String, Int>,
     selectedPlaylist: LivePlaylistSelection,
-    sidebarWidth: Dp,
+    metrics: LiveTvUiMetrics,
     onSelectPlaylist: (LivePlaylistSelection) -> Unit
 ) {
     Surface(
         color = BgCharcoalElevated,
         border = BorderStroke(1.dp, SurfaceBorderSubtle.copy(alpha = 0.5f)),
         modifier = Modifier
-            .width(sidebarWidth)
+            .width(metrics.sidebarWidth)
             .fillMaxHeight()
             .testTag("live_category_sidebar")
     ) {
@@ -728,27 +963,27 @@ fun LivePlaylistsSidebar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(SurfaceCard)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                    .padding(horizontal = 8.dp, vertical = metrics.playlistHeaderPad),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = "Playlists",
-                    style = MaterialTheme.typography.labelLarge,
+                    fontSize = metrics.playlistFontSp,
                     fontWeight = FontWeight.Bold,
                     color = ElectricCyan
                 )
                 Text(
                     text = "${categories.size}",
-                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = metrics.playlistCountSp,
                     color = TextMuted
                 )
             }
             HorizontalDivider(color = SurfaceBorderSubtle.copy(alpha = 0.5f))
 
             LazyColumn(
-                contentPadding = PaddingValues(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 item(key = "pl_all_channels") {
@@ -757,6 +992,7 @@ fun LivePlaylistsSidebar(
                         count = allChannelsCount,
                         selected = selectedPlaylist is LivePlaylistSelection.All,
                         isSpecial = true,
+                        metrics = metrics,
                         onClick = { onSelectPlaylist(LivePlaylistSelection.All) },
                         modifier = Modifier.testTag("playlist_card_all")
                     )
@@ -767,6 +1003,7 @@ fun LivePlaylistsSidebar(
                         count = favoritesCount,
                         selected = selectedPlaylist is LivePlaylistSelection.Favorites,
                         isSpecial = true,
+                        metrics = metrics,
                         onClick = { onSelectPlaylist(LivePlaylistSelection.Favorites) },
                         modifier = Modifier.testTag("playlist_card_favorites")
                     )
@@ -782,6 +1019,7 @@ fun LivePlaylistsSidebar(
                         count = countsByCategory[cat.categoryId] ?: 0,
                         selected = isSelected,
                         isSpecial = false,
+                        metrics = metrics,
                         onClick = { onSelectPlaylist(LivePlaylistSelection.Category(cat)) },
                         modifier = Modifier.testTag("playlist_card_${cat.categoryId}")
                     )
@@ -797,43 +1035,42 @@ private fun PlaylistSidebarRow(
     count: Int,
     selected: Boolean,
     isSpecial: Boolean,
+    metrics: LiveTvUiMetrics,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(7.dp),
         color = if (selected) ElectricCyan.copy(alpha = 0.16f) else Color.Transparent,
         border = if (selected) BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.65f)) else null,
-        modifier = modifier
-            .fillMaxWidth()
-            .minimumInteractiveComponentSize()
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 6.dp, vertical = metrics.playlistRowPadV),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(
                 imageVector = if (isSpecial) Icons.Rounded.PlaylistPlay else Icons.Rounded.Folder,
                 contentDescription = null,
                 tint = if (selected) ElectricCyan else TextMuted,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(metrics.playlistIconSize)
             )
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                fontSize = metrics.playlistFontSp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (selected) ElectricCyan else TextPrimary,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = "$count",
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = metrics.playlistCountSp,
                 color = if (selected) ElectricCyan else TextMuted
             )
         }
@@ -845,8 +1082,7 @@ fun LiveEpgTimelineHeaderRow(
     nowEpochSec: Long,
     windowStartSec: Long,
     slotCount: Int,
-    slotWidth: Dp,
-    channelColWidth: Dp,
+    metrics: LiveTvUiMetrics,
     nowOffsetDp: Dp,
     timelineScrollState: ScrollState
 ) {
@@ -859,36 +1095,34 @@ fun LiveEpgTimelineHeaderRow(
             fmt.format(Date((windowStartSec + idx * 1800L) * 1000L))
         }
     }
-    val totalTimelineWidth = slotWidth * slotCount
+    val totalTimelineWidth = metrics.slotWidth * slotCount
 
     Surface(
         color = SurfaceCard,
         modifier = Modifier
             .fillMaxWidth()
-            .height(38.dp)
+            .height(metrics.timelineHeaderHeight)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left header cell (current date & time)
             Box(
                 modifier = Modifier
-                    .width(channelColWidth)
+                    .width(metrics.channelColWidth)
                     .fillMaxHeight()
-                    .padding(horizontal = 10.dp),
+                    .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
                 Text(
                     text = headerDateText,
-                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = metrics.timelineHeaderSp,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // Right horizontally-scrollable time slots header + cyan NOW dot
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -904,14 +1138,14 @@ fun LiveEpgTimelineHeaderRow(
                         timeLabels.forEach { label ->
                             Box(
                                 modifier = Modifier
-                                    .width(slotWidth)
+                                    .width(metrics.slotWidth)
                                     .fillMaxHeight()
                                     .padding(start = 8.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 Text(
                                     text = label,
-                                    style = MaterialTheme.typography.labelMedium,
+                                    fontSize = metrics.timelineHeaderSp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = TextPrimary
                                 )
@@ -919,7 +1153,6 @@ fun LiveEpgTimelineHeaderRow(
                         }
                     }
 
-                    // Cyan vertical NOW line + glowing top circle node
                     Box(
                         modifier = Modifier
                             .offset(x = nowOffsetDp - 1.dp)
@@ -929,9 +1162,9 @@ fun LiveEpgTimelineHeaderRow(
                     )
                     Box(
                         modifier = Modifier
-                            .offset(x = nowOffsetDp - 5.dp)
+                            .offset(x = nowOffsetDp - 4.dp)
                             .align(Alignment.CenterStart)
-                            .size(10.dp)
+                            .size(8.dp)
                             .clip(CircleShape)
                             .background(ElectricCyan)
                     )
@@ -949,8 +1182,7 @@ fun LiveEpgGuideChannelRow(
     isFavorite: Boolean,
     isPreviewing: Boolean,
     isSelectedForInfo: Boolean,
-    channelColWidth: Dp,
-    slotWidth: Dp,
+    metrics: LiveTvUiMetrics,
     slotCount: Int,
     windowStartSec: Long,
     nowOffsetDp: Dp,
@@ -960,8 +1192,8 @@ fun LiveEpgGuideChannelRow(
     onToggleFavorite: () -> Unit
 ) {
     val windowEndSec = windowStartSec + slotCount * 1800L
-    val dpPerSecond = slotWidth.value / 1800f
-    val totalTimelineWidth = slotWidth * slotCount
+    val dpPerSecond = metrics.slotWidth.value / 1800f
+    val totalTimelineWidth = metrics.slotWidth * slotCount
 
     val timelineSegments = remember(epgItems, windowStartSec, showEpgInfo) {
         if (!showEpgInfo || epgItems.isEmpty()) {
@@ -986,16 +1218,16 @@ fun LiveEpgGuideChannelRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(58.dp),
+                .height(metrics.guideRowHeight),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left Pinned Channel Info Column
             Row(
                 modifier = Modifier
-                    .width(channelColWidth)
+                    .width(metrics.channelColWidth)
                     .fillMaxHeight()
                     .clickable { onChannelClick() }
-                    .padding(end = 6.dp),
+                    .padding(end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -1004,12 +1236,12 @@ fun LiveEpgGuideChannelRow(
                         .fillMaxHeight()
                         .background(if (isPreviewing) ElectricCyan else Color.Transparent)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(5.dp))
 
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(metrics.guideLogoSize)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(SurfaceCardVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1028,23 +1260,23 @@ fun LiveEpgGuideChannelRow(
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(3.dp)
+                                .padding(2.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.LiveTv,
                             contentDescription = channel.name,
                             tint = ElectricCyan,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size((metrics.guideLogoSize * 0.58f).coerceAtLeast(12.dp))
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
                     text = channel.name,
-                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = metrics.guideChannelSp,
                     fontWeight = if (isPreviewing) FontWeight.Bold else FontWeight.Medium,
                     color = if (isPreviewing) ElectricCyan else TextPrimary,
                     maxLines = 1,
@@ -1054,13 +1286,13 @@ fun LiveEpgGuideChannelRow(
 
                 IconButton(
                     onClick = onToggleFavorite,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size((metrics.guideRowHeight * 0.62f).coerceAtLeast(24.dp))
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
                         contentDescription = "Favorite",
                         tint = if (isFavorite) ElectricCyan else TextMuted,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size((metrics.guideLogoSize * 0.55f).coerceAtLeast(13.dp))
                     )
                 }
             }
@@ -1082,15 +1314,15 @@ fun LiveEpgGuideChannelRow(
                             repeat(slotCount) { idx ->
                                 Box(
                                     modifier = Modifier
-                                        .width(slotWidth)
+                                        .width(metrics.slotWidth)
                                         .fillMaxHeight()
                                         .clickable { onChannelClick() }
-                                        .padding(horizontal = 10.dp),
+                                        .padding(horizontal = 8.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     Text(
                                         text = if (showEpgInfo) "NO EPG Available" else "Live Broadcast",
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontSize = metrics.guideProgramSp,
                                         color = if (isPreviewing) TextPrimary else TextSecondary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1130,16 +1362,16 @@ fun LiveEpgGuideChannelRow(
                                     .clickable {
                                         if (epg != null) onProgramClick(epg) else onChannelClick()
                                     }
-                                    .padding(horizontal = 10.dp),
+                                    .padding(horizontal = 8.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(
                                         text = epg?.title ?: "NO EPG Available",
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontSize = metrics.guideProgramSp,
                                         fontWeight = if (isNow) FontWeight.SemiBold else FontWeight.Normal,
                                         color = when {
                                             isNow -> TextPrimary
@@ -1155,7 +1387,7 @@ fun LiveEpgGuideChannelRow(
                                             imageVector = Icons.Rounded.History,
                                             contentDescription = "Catch-Up",
                                             tint = ElectricCyan,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(13.dp)
                                         )
                                     }
                                 }
@@ -1163,7 +1395,7 @@ fun LiveEpgGuideChannelRow(
                         }
                     }
 
-                    // Cyan vertical NOW timeline beam & row node (matches reference guide!)
+                    // Cyan vertical NOW timeline beam & row node
                     Box(
                         modifier = Modifier
                             .offset(x = nowOffsetDp - 1.dp)
@@ -1173,12 +1405,12 @@ fun LiveEpgGuideChannelRow(
                     )
                     Box(
                         modifier = Modifier
-                            .offset(x = nowOffsetDp - 4.dp)
+                            .offset(x = nowOffsetDp - 3.5.dp)
                             .align(Alignment.CenterStart)
-                            .size(8.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
                             .background(BgCharcoal)
-                            .border(2.dp, ElectricCyan, CircleShape)
+                            .border(1.5.dp, ElectricCyan, CircleShape)
                     )
                 }
             }
