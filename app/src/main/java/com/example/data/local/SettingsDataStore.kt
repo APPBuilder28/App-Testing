@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.core.i18n.AppLanguage
+import com.example.core.update.GitHubAppUpdater
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
@@ -58,6 +59,7 @@ data class UserSettings(
     val ukLivePlaylistsOnly: Boolean = false,
     val englishVodOnly: Boolean = false,
     val liveTvUiScalePercent: Int = 40,
+    val githubUpdateRepo: String = GitHubAppUpdater.DEFAULT_GITHUB_REPO,
     val playlistSelections: Map<String, PlaylistSelectionConfig> = emptyMap()
 ) {
     fun playlistSelectionFor(sourceId: String?, section: PlaylistSection): PlaylistSelectionConfig {
@@ -91,6 +93,7 @@ class SettingsRepository(private val context: Context) {
         val UK_LIVE_PLAYLISTS_ONLY = booleanPreferencesKey("uk_live_playlists_only")
         val ENGLISH_VOD_ONLY = booleanPreferencesKey("english_vod_only")
         val LIVE_TV_UI_SCALE_PERCENT = intPreferencesKey("live_tv_ui_scale_percent")
+        val GITHUB_UPDATE_REPO = stringPreferencesKey("github_update_repo")
         val PLAYLIST_SELECTIONS_JSON = stringPreferencesKey("playlist_selections_json")
     }
 
@@ -118,6 +121,7 @@ class SettingsRepository(private val context: Context) {
             ukLivePlaylistsOnly = prefs[Keys.UK_LIVE_PLAYLISTS_ONLY] ?: false,
             englishVodOnly = prefs[Keys.ENGLISH_VOD_ONLY] ?: false,
             liveTvUiScalePercent = (prefs[Keys.LIVE_TV_UI_SCALE_PERCENT] ?: 40).coerceIn(0, 100),
+            githubUpdateRepo = prefs[Keys.GITHUB_UPDATE_REPO]?.takeIf { it.isNotBlank() } ?: GitHubAppUpdater.DEFAULT_GITHUB_REPO,
             playlistSelections = decodedSelections
         )
     }
@@ -168,6 +172,11 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLiveTvUiScalePercent(percent: Int) {
         context.settingsDataStore.edit { it[Keys.LIVE_TV_UI_SCALE_PERCENT] = percent.coerceIn(0, 100) }
+    }
+
+    suspend fun setGithubUpdateRepo(repo: String) {
+        val cleaned = repo.trim().ifBlank { GitHubAppUpdater.DEFAULT_GITHUB_REPO }
+        context.settingsDataStore.edit { it[Keys.GITHUB_UPDATE_REPO] = cleaned }
     }
 
     suspend fun setPlaylistSelection(

@@ -1,5 +1,6 @@
 package com.example.player
 
+import android.app.ActivityManager
 import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
@@ -143,6 +144,7 @@ class NextVuPlayerController(
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
+            .setDefaultRequestProperties(mapOf("Connection" to "keep-alive"))
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
         val extractorsFactory = DefaultExtractorsFactory()
@@ -154,33 +156,23 @@ class NextVuPlayerController(
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
             .setAllowedVideoJoiningTimeMs(5_000L)
-            .forceEnableMediaCodecAsynchronousQueueing()
 
+        // Strictly cap buffer bytes based on device RAM class so 4K HDR/HEVC streams never
+        // balloon JVM heap into GC thrashing or OutOfMemoryError crashes.
+        val targetBufferBytes = computeSafeTargetBufferBytes(context, preferVodSmoothBuffering)
         val allocator = DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)
-        val loadControlBuilder = DefaultLoadControl.Builder()
+        val loadControl = DefaultLoadControl.Builder()
             .setAllocator(allocator)
-            .setPrioritizeTimeOverSizeThresholds(true)
-
-        val loadControl = if (preferVodSmoothBuffering) {
-            loadControlBuilder
-                .setBufferDurationsMs(
-                    20_000, // minBufferMs: deeper read-ahead for high-bitrate MKV/MP4 movies
-                    50_000, // maxBufferMs: avoids bursty HTTP stalls during action scenes
-                    1_500,  // bufferForPlaybackMs
-                    3_000   // bufferForPlaybackAfterRebufferMs
-                )
-                .setBackBuffer(10_000, true)
-                .build()
-        } else {
-            loadControlBuilder
-                .setBufferDurationsMs(
-                    10_000, // minBufferMs
-                    25_000, // maxBufferMs
-                    1_500,  // bufferForPlaybackMs
-                    3_000   // bufferForPlaybackAfterRebufferMs
-                )
-                .build()
-        }
+            .setBufferDurationsMs(
+                if (preferVodSmoothBuffering) 12_000 else 10_000, // minBufferMs
+                if (preferVodSmoothBuffering) 25_000 else 22_000, // maxBufferMs
+                1_500,                                            // bufferForPlaybackMs
+                3_000                                             // bufferForPlaybackAfterRebufferMs
+            )
+            .setTargetBufferBytes(targetBufferBytes)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setBackBuffer(0, false)
+            .build()
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
@@ -201,6 +193,21 @@ class NextVuPlayerController(
             .build()
 
         attachListeners()
+    }
+
+    private fun computeSafeTargetBufferBytes(
+        context: Context,
+        preferVodSmoothBuffering: Boolean
+    ): Int {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val memoryClassMb = am?.memoryClass ?: 192
+        val isLowRam = am?.isLowRamDevice == true
+        val capMb = when {
+            isLowRam || memoryClassMb <= 128 -> if (preferVodSmoothBuffering) 18 else 12
+            memoryClassMb <= 256 -> if (preferVodSmoothBuffering) 28 else 18
+            else -> if (preferVodSmoothBuffering) 40 else 24
+        }
+        return capMb * 1024 * 1024
     }
 
     fun setHudUpdatesEnabled(enabled: Boolean) {

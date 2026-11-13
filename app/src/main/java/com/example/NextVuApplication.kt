@@ -30,7 +30,7 @@ class NextVuApplication : Application(), ImageLoaderFactory {
             .allowHardware(false)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.15)
+                    .maxSizePercent(0.10)
                     .build()
             }
             .diskCache {

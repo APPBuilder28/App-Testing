@@ -166,6 +166,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
     val selectedSeriesDetail by viewModel.selectedSeriesDetail.collectAsState()
     val channelEpgMap by viewModel.channelEpgMap.collectAsState()
     val activePlaybackTarget by viewModel.activePlaybackTarget.collectAsState()
+    val updateCheckState by viewModel.updateCheckState.collectAsState()
     val context = LocalContext.current
 
     var showQuickSwitchDialog by remember { mutableStateOf(false) }
@@ -578,6 +579,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 isOfflineMode = isOfflineMode,
                                 settings = settings,
                                 hasParentalPin = viewModel.hasParentalPin(),
+                                updateCheckState = updateCheckState,
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onSelectVideoQuality = { viewModel.setVideoQuality(it) },
                                 onSetSubtitleSize = { viewModel.setSubtitleFontSize(it) },
@@ -590,6 +592,8 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 onSetUkLivePlaylistsOnly = { viewModel.setUkLivePlaylistsOnly(it) },
                                 onSetEnglishVodOnly = { viewModel.setEnglishVodOnly(it) },
                                 onSetLiveTvUiScale = { viewModel.setLiveTvUiScalePercent(it) },
+                                onSetGithubUpdateRepo = { viewModel.setGithubUpdateRepo(it) },
+                                onCheckForAppUpdate = { viewModel.checkForAppUpdate(it) },
                                 onEnableParentalPin = { viewModel.enableParentalLock(it) },
                                 onVerifyAndDisableParentalPin = { pin ->
                                     val ok = viewModel.verifyParentalPin(pin)

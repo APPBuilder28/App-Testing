@@ -3,10 +3,13 @@ package com.example.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.core.i18n.AppLanguage
 import com.example.core.security.ImportedSourceDraft
 import com.example.core.security.SecureSourceStorage
 import com.example.core.security.XtreamSourceProfile
+import com.example.core.update.AppUpdateUiState
+import com.example.core.update.GitHubAppUpdater
 import com.example.data.local.MediaContentType
 import com.example.data.local.NextVuDatabase
 import com.example.data.local.PlaybackProgressEntity
@@ -193,6 +196,9 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _activePlaybackTarget = MutableStateFlow<PlaybackTarget?>(null)
     val activePlaybackTarget: StateFlow<PlaybackTarget?> = _activePlaybackTarget.asStateFlow()
+
+    private val _updateCheckState = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
+    val updateCheckState: StateFlow<AppUpdateUiState> = _updateCheckState.asStateFlow()
 
     private var catalogLoadJob: Job? = null
 
@@ -734,6 +740,34 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setLiveTvUiScalePercent(percent: Int) = viewModelScope.launch {
         settingsRepo.setLiveTvUiScalePercent(percent)
+    }
+
+    fun setGithubUpdateRepo(repoInput: String) = viewModelScope.launch {
+        val normalized = GitHubAppUpdater.normalizeRepoSlug(repoInput) ?: repoInput.trim()
+        settingsRepo.setGithubUpdateRepo(normalized)
+        _updateCheckState.value = AppUpdateUiState.Idle
+    }
+
+    fun checkForAppUpdate(overrideRepoInput: String? = null) {
+        val repo = (overrideRepoInput ?: settings.value.githubUpdateRepo)
+            .trim()
+            .ifBlank { GitHubAppUpdater.DEFAULT_GITHUB_REPO }
+        val slug = GitHubAppUpdater.normalizeRepoSlug(repo)
+        if (slug == null) {
+            _updateCheckState.value = AppUpdateUiState.Error(
+                "Enter a valid GitHub repository first (e.g. owner/nextvu-player or GitHub URL)."
+            )
+            return
+        }
+        if (_updateCheckState.value is AppUpdateUiState.Checking) return
+        viewModelScope.launch {
+            _updateCheckState.value = AppUpdateUiState.Checking(slug)
+            _updateCheckState.value = GitHubAppUpdater.checkForUpdate(
+                repoInput = slug,
+                installedVersionName = BuildConfig.VERSION_NAME,
+                installedVersionCode = BuildConfig.VERSION_CODE
+            )
+        }
     }
 
     fun setPlaylistSelection(

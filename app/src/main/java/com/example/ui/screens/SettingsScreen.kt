@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,20 +25,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -67,12 +72,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
 import com.example.core.i18n.AppLanguage
 import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.ImportedSourceDraft
 import com.example.core.security.JsonParseResult
 import com.example.core.security.JsonSourceImporter
 import com.example.core.security.XtreamSourceProfile
+import com.example.core.update.AppUpdateUiState
+import com.example.core.update.GitHubAppUpdater
 import com.example.data.local.SubtitleColorOption
 import com.example.data.local.UserSettings
 import com.example.data.local.VideoQualityPreset
@@ -82,6 +90,7 @@ import com.example.ui.components.ImportSourcesPreviewDialog
 import com.example.ui.components.LegalDisclaimerBanner
 import com.example.ui.components.NextVuButton
 import com.example.ui.components.NextVuFilterChip
+import com.example.ui.components.NextVuOutlinedButton
 import com.example.ui.components.NextVuTextButton
 import com.example.ui.components.NextVuTopBar
 import com.example.ui.components.rememberHoverFocusState
@@ -91,6 +100,8 @@ import com.example.ui.theme.BgCharcoal
 import com.example.ui.theme.DeepViolet
 import com.example.ui.theme.ElectricCyan
 import com.example.ui.theme.ErrorRose
+import com.example.ui.theme.HdrGold
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.SurfaceBorderSubtle
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceCardVariant
@@ -106,6 +117,7 @@ fun SettingsScreen(
     isOfflineMode: Boolean,
     settings: UserSettings,
     hasParentalPin: Boolean,
+    updateCheckState: AppUpdateUiState,
     onOpenQuickSwitch: () -> Unit,
     onSelectVideoQuality: (VideoQualityPreset) -> Unit,
     onSetSubtitleSize: (Float) -> Unit,
@@ -118,6 +130,8 @@ fun SettingsScreen(
     onSetUkLivePlaylistsOnly: (Boolean) -> Unit,
     onSetEnglishVodOnly: (Boolean) -> Unit,
     onSetLiveTvUiScale: (Int) -> Unit,
+    onSetGithubUpdateRepo: (String) -> Unit,
+    onCheckForAppUpdate: (String?) -> Unit,
     onEnableParentalPin: (String) -> Unit,
     onVerifyAndDisableParentalPin: (String) -> Boolean,
     onClearActiveSourceHistory: () -> Unit,
@@ -135,6 +149,7 @@ fun SettingsScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showResetSourcesDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showGithubRepoDialog by remember { mutableStateOf(false) }
 
     var parsedSourcesForPreview by remember { mutableStateOf<List<ImportedSourceDraft>?>(null) }
     var pendingSourcesAfterWarning by remember { mutableStateOf<List<ImportedSourceDraft>?>(null) }
@@ -418,11 +433,206 @@ fun SettingsScreen(
                 }
             }
 
+            // Application Updater (GitHub Sync)
+            item {
+                SettingsCard(icon = Icons.Rounded.SystemUpdate, title = "App Updates (GitHub Sync)") {
+                    Text(
+                        text = "Installed: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = ElectricCyan
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val effectiveRepo = settings.githubUpdateRepo.ifBlank { GitHubAppUpdater.DEFAULT_GITHUB_REPO }
+                    Text(
+                        text = "GitHub Repo: $effectiveRepo",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        NextVuOutlinedButton(
+                            onClick = { showGithubRepoDialog = true },
+                            border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.55f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("settings_set_github_repo_btn")
+                        ) {
+                            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Edit Repo")
+                        }
+
+                        NextVuButton(
+                            onClick = { onCheckForAppUpdate(effectiveRepo) },
+                            enabled = updateCheckState !is AppUpdateUiState.Checking,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("settings_check_updates_btn")
+                        ) {
+                            if (updateCheckState is AppUpdateUiState.Checking) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = BgCharcoal
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Checking...")
+                            } else {
+                                Icon(Icons.Rounded.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Check Updates", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+                    when (updateCheckState) {
+                        AppUpdateUiState.Idle -> Unit
+                        is AppUpdateUiState.Checking -> {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Checking ${updateCheckState.repoSlug} on GitHub...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+
+                        is AppUpdateUiState.UpdateAvailable -> {
+                            val info = updateCheckState.info
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Surface(
+                                color = ElectricCyan.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.65f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("settings_update_available_card")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val buildSuffix = info.latestVersionCode?.let { " (Build $it)" } ?: ""
+                                    Text(
+                                        text = "New Version Available: ${info.latestVersionName}$buildSuffix",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = ElectricCyan
+                                    )
+                                    Text(
+                                        text = "Source: ${info.sourceLabel}" + (info.publishedOrSyncedAt?.let { " • $it" } ?: ""),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = HdrGold
+                                    )
+                                    if (info.summaryText.isNotBlank()) {
+                                        Text(
+                                            text = info.summaryText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextPrimary
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val downloadTarget = info.directApkAssetUrl ?: info.releaseOrBuildUrl
+                                    NextVuButton(
+                                        onClick = { openExternalUrl(context, downloadTarget) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("settings_open_github_update_btn")
+                                    ) {
+                                        Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (info.directApkAssetUrl != null) {
+                                                "Download Latest APK (GitHub)"
+                                            } else {
+                                                "Open Latest Build on GitHub"
+                                            },
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    if (info.directApkAssetUrl != null && info.releaseOrBuildUrl != info.directApkAssetUrl) {
+                                        NextVuTextButton(
+                                            onClick = { openExternalUrl(context, info.releaseOrBuildUrl) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("View Release Notes on GitHub", color = ElectricCyan)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        is AppUpdateUiState.UpToDate -> {
+                            val info = updateCheckState.info
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Surface(
+                                color = SuccessGreen.copy(alpha = 0.10f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.55f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("settings_update_uptodate_card")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Rounded.CheckCircle,
+                                            contentDescription = null,
+                                            tint = SuccessGreen,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        val buildSuffix = info.latestVersionCode?.let { " (Build $it)" } ?: ""
+                                        Text(
+                                            text = "Up to date • ${info.latestVersionName}$buildSuffix",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = SuccessGreen
+                                        )
+                                    }
+                                    if (info.summaryText.isNotBlank()) {
+                                        Text(
+                                            text = info.summaryText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                    NextVuTextButton(
+                                        onClick = { openExternalUrl(context, info.releaseOrBuildUrl) }
+                                    ) {
+                                        Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Open GitHub Repo / Builds", color = ElectricCyan)
+                                    }
+                                }
+                            }
+                        }
+
+                        is AppUpdateUiState.Error -> {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = updateCheckState.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ErrorRose,
+                                modifier = Modifier.testTag("settings_update_error_text")
+                            )
+                        }
+                    }
+                }
+            }
+
             // About & Legal Disclaimer
             item {
                 SettingsCard(icon = Icons.Rounded.Info, title = strings.aboutLegalTitle) {
                     Text(
-                        text = "${strings.appName} • Version 1.0.0",
+                        text = "${strings.appName} • v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.titleMedium,
                         color = ElectricCyan
                     )
@@ -589,6 +799,72 @@ fun SettingsScreen(
         )
     }
 
+    if (showGithubRepoDialog) {
+        var repoInput by remember(settings.githubUpdateRepo) {
+            mutableStateOf(settings.githubUpdateRepo.ifBlank { GitHubAppUpdater.DEFAULT_GITHUB_REPO })
+        }
+        var repoError by remember { mutableStateOf<String?>(null) }
+
+        AlertDialog(
+            onDismissRequest = { showGithubRepoDialog = false },
+            containerColor = SurfaceCard,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = ElectricCyan)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("GitHub Update Repository", color = TextPrimary)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Enter your synced GitHub repository (owner/repo or full GitHub URL) to check Releases and synced main/master builds.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    OutlinedTextField(
+                        value = repoInput,
+                        onValueChange = {
+                            repoInput = it
+                            repoError = null
+                        },
+                        label = { Text("GitHub Repository") },
+                        placeholder = { Text("e.g. APPBuilder28/App-Testing") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("settings_github_repo_input")
+                    )
+                    if (repoError != null) {
+                        Text(repoError!!, color = ErrorRose, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                NextVuButton(
+                    onClick = {
+                        val slug = GitHubAppUpdater.normalizeRepoSlug(repoInput)
+                        if (slug == null) {
+                            repoError = "Enter a valid owner/repo or https://github.com/owner/repo URL."
+                        } else {
+                            onSetGithubUpdateRepo(slug)
+                            showGithubRepoDialog = false
+                            onCheckForAppUpdate(slug)
+                        }
+                    },
+                    modifier = Modifier.testTag("settings_save_github_repo_btn")
+                ) {
+                    Text("Save & Check")
+                }
+            },
+            dismissButton = {
+                NextVuTextButton(onClick = { showGithubRepoDialog = false }) {
+                    Text(strings.cancel, color = TextSecondary)
+                }
+            }
+        )
+    }
+
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
@@ -596,7 +872,11 @@ fun SettingsScreen(
             title = { Text(strings.aboutLegalTitle, color = TextPrimary) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("NextVu Player v1.0.0", fontWeight = FontWeight.Bold, color = ElectricCyan)
+                    Text(
+                        "NextVu Player v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricCyan
+                    )
                     Text(strings.legalDisclaimerFull, color = TextSecondary)
                     Text(
                         "Engine: Jetpack Media3 ExoPlayer (HEVC H.265 hardware + software fallback, 4K 2160p UHD, HDR10/HLG/DV detection, AC3/E-AC3 passthrough & PCM fallback).",
@@ -792,5 +1072,18 @@ private fun SettingsToggleRow(
             ),
             modifier = Modifier.testTag(testTag)
         )
+    }
+}
+
+private fun openExternalUrl(context: Context, url: String) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "No browser app found to open GitHub link.", Toast.LENGTH_LONG).show()
+    } catch (_: Exception) {
+        Toast.makeText(context, "Unable to open link: $url", Toast.LENGTH_LONG).show()
     }
 }

@@ -358,7 +358,7 @@ fun FullScreenPlayerScreen(
         )
 
         // Media3 PlayerView Surface + Customized Subtitles (styles applied only on change)
-        var lastSubSignature by remember { mutableStateOf<Triple<Float, Int, Float>?>(null) }
+        val appliedSubSignature = remember { arrayOfNulls<Triple<Float, Int, Float>>(1) }
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -386,8 +386,8 @@ fun FullScreenPlayerScreen(
                     settings.subtitleColor.argb,
                     settings.subtitleBgOpacity
                 )
-                if (lastSubSignature != desiredSig) {
-                    lastSubSignature = desiredSig
+                if (appliedSubSignature[0] != desiredSig) {
+                    appliedSubSignature[0] = desiredSig
                     view.subtitleView?.let { subView ->
                         subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, settings.subtitleFontSizeSp)
                         val bgAlphaInt = (settings.subtitleBgOpacity * 255).toInt().coerceIn(0, 255)
