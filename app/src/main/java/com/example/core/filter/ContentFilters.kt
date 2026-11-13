@@ -116,4 +116,56 @@ object ContentFilters {
         val visibleSeries = data.series.filter { visibleCatIds.contains(it.categoryId) }
         return SeriesCatalogData(categories = visibleCategories, series = visibleSeries)
     }
+
+    /**
+     * Restricts movies strictly to the user's selected/visible playlists (from Edit Playlists,
+     * English VOD setting, and optional active category chip) so search bars never leak items
+     * from unselected playlists.
+     */
+    fun filterMoviesInSelectedPlaylists(
+        data: MoviesCatalogData,
+        englishOnly: Boolean,
+        visibleCategoryIds: Set<String>?,
+        activeCategoryId: String? = null
+    ): MoviesCatalogData {
+        val langFiltered = filterMoviesCatalog(data, englishOnly)
+        val playlistFiltered = filterVisibleMoviesPlaylists(langFiltered, visibleCategoryIds)
+        val allowedCatIds = playlistFiltered.categories.map { it.categoryId }.toSet()
+        val scopedMovies = playlistFiltered.movies.filter { movie ->
+            val inVisiblePlaylist = if (englishOnly || visibleCategoryIds != null) {
+                allowedCatIds.contains(movie.categoryId)
+            } else {
+                true
+            }
+            val matchesActiveChip = activeCategoryId == null || movie.categoryId == activeCategoryId
+            inVisiblePlaylist && matchesActiveChip
+        }
+        return playlistFiltered.copy(movies = scopedMovies)
+    }
+
+    /**
+     * Restricts series strictly to the user's selected/visible playlists (from Edit Playlists,
+     * English VOD setting, and optional active category chip) so search bars never leak items
+     * from unselected playlists.
+     */
+    fun filterSeriesInSelectedPlaylists(
+        data: SeriesCatalogData,
+        englishOnly: Boolean,
+        visibleCategoryIds: Set<String>?,
+        activeCategoryId: String? = null
+    ): SeriesCatalogData {
+        val langFiltered = filterSeriesCatalog(data, englishOnly)
+        val playlistFiltered = filterVisibleSeriesPlaylists(langFiltered, visibleCategoryIds)
+        val allowedCatIds = playlistFiltered.categories.map { it.categoryId }.toSet()
+        val scopedSeries = playlistFiltered.series.filter { series ->
+            val inVisiblePlaylist = if (englishOnly || visibleCategoryIds != null) {
+                allowedCatIds.contains(series.categoryId)
+            } else {
+                true
+            }
+            val matchesActiveChip = activeCategoryId == null || series.categoryId == activeCategoryId
+            inVisiblePlaylist && matchesActiveChip
+        }
+        return playlistFiltered.copy(series = scopedSeries)
+    }
 }

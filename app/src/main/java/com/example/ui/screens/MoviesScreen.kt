@@ -170,8 +170,12 @@ fun MoviesScreen(
                 val baseCountsByCategory = remember(baseData.movies) {
                     baseData.movies.groupingBy { it.categoryId }.eachCount()
                 }
-                val effectiveData = remember(baseData, visibleCategoryIds) {
-                    ContentFilters.filterVisibleMoviesPlaylists(baseData, visibleCategoryIds)
+                val effectiveData = remember(moviesState.data, englishOnly, visibleCategoryIds) {
+                    ContentFilters.filterMoviesInSelectedPlaylists(
+                        data = moviesState.data,
+                        englishOnly = englishOnly,
+                        visibleCategoryIds = visibleCategoryIds
+                    )
                 }
                 val categories = effectiveData.categories
                 val availableYears = remember(effectiveData.movies) {
@@ -182,10 +186,21 @@ fun MoviesScreen(
                 val activeCategoryId = selectedCategoryId?.takeIf { sel ->
                     categories.any { it.categoryId == sel }
                 }
+                val activeCategoryName = remember(categories, activeCategoryId) {
+                    activeCategoryId?.let { id -> categories.firstOrNull { it.categoryId == id }?.categoryName }
+                }
+
+                val searchScopeMovies = remember(moviesState.data, englishOnly, visibleCategoryIds, activeCategoryId) {
+                    ContentFilters.filterMoviesInSelectedPlaylists(
+                        data = moviesState.data,
+                        englishOnly = englishOnly,
+                        visibleCategoryIds = visibleCategoryIds,
+                        activeCategoryId = activeCategoryId
+                    ).movies
+                }
 
                 val filtered = remember(
-                    effectiveData.movies,
-                    activeCategoryId,
+                    searchScopeMovies,
                     selectedYear,
                     minRating,
                     sortOption,
@@ -193,13 +208,12 @@ fun MoviesScreen(
                     favoriteIds,
                     searchQuery
                 ) {
-                    val base = effectiveData.movies.filter { movie ->
-                        val catOk = activeCategoryId == null || movie.categoryId == activeCategoryId
+                    val base = searchScopeMovies.filter { movie ->
                         val yearOk = selectedYear == null || movie.year == selectedYear
                         val ratingOk = movie.rating >= minRating
                         val favOk = !favoritesOnly || favoriteIds.contains(movie.streamId)
                         val searchOk = searchQuery.isBlank() || movie.name.contains(searchQuery, ignoreCase = true)
-                        catOk && yearOk && ratingOk && favOk && searchOk
+                        yearOk && ratingOk && favOk && searchOk
                     }
                     when (sortOption) {
                         MediaSortOption.RECENT -> base.sortedByDescending { it.addedTimestamp }
@@ -209,12 +223,25 @@ fun MoviesScreen(
                     }
                 }
 
+                val searchPlaceholder = remember(activeCategoryName, visibleCategoryIds, categories.size) {
+                    when {
+                        activeCategoryName != null -> "Search movies in $activeCategoryName..."
+                        visibleCategoryIds != null && categories.isEmpty() -> "No movie playlists selected"
+                        visibleCategoryIds != null -> {
+                            val noun = if (categories.size == 1) "playlist" else "playlists"
+                            "Search movies in ${categories.size} selected $noun..."
+                        }
+                        categories.isNotEmpty() -> "Search movies in ${categories.size} playlists..."
+                        else -> "Search movies..."
+                    }
+                }
+
                 // Search & Filters (text box only opens when clicked)
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     ClickToEditSearchBar(
                         query = searchQuery,
                         onQueryChange = { searchQuery = it },
-                        placeholder = strings.searchHint,
+                        placeholder = searchPlaceholder,
                         height = 50.dp,
                         shape = RoundedCornerShape(12.dp),
                         testTag = "movies_search_input",

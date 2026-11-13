@@ -160,14 +160,12 @@ fun HomeDashboardScreen(
                 }
                 val filteredMovies = remember(moviesState, englishVodOnly, visibleMovieCategoryIds) {
                     (moviesState as? CatalogUiState.Success)?.data?.let {
-                        val langFiltered = ContentFilters.filterMoviesCatalog(it, englishVodOnly)
-                        ContentFilters.filterVisibleMoviesPlaylists(langFiltered, visibleMovieCategoryIds)
+                        ContentFilters.filterMoviesInSelectedPlaylists(it, englishVodOnly, visibleMovieCategoryIds)
                     }
                 }
                 val filteredSeries = remember(seriesState, englishVodOnly, visibleSeriesCategoryIds) {
                     (seriesState as? CatalogUiState.Success)?.data?.let {
-                        val langFiltered = ContentFilters.filterSeriesCatalog(it, englishVodOnly)
-                        ContentFilters.filterVisibleSeriesPlaylists(langFiltered, visibleSeriesCategoryIds)
+                        ContentFilters.filterSeriesInSelectedPlaylists(it, englishVodOnly, visibleSeriesCategoryIds)
                     }
                 }
 
@@ -329,14 +327,12 @@ fun HomeDashboardScreen(
         }
         val searchMovies = remember(moviesState, englishVodOnly, visibleMovieCategoryIds) {
             (moviesState as? CatalogUiState.Success)?.data?.let {
-                val langFiltered = ContentFilters.filterMoviesCatalog(it, englishVodOnly)
-                ContentFilters.filterVisibleMoviesPlaylists(langFiltered, visibleMovieCategoryIds).movies
+                ContentFilters.filterMoviesInSelectedPlaylists(it, englishVodOnly, visibleMovieCategoryIds).movies
             }.orEmpty()
         }
         val searchSeries = remember(seriesState, englishVodOnly, visibleSeriesCategoryIds) {
             (seriesState as? CatalogUiState.Success)?.data?.let {
-                val langFiltered = ContentFilters.filterSeriesCatalog(it, englishVodOnly)
-                ContentFilters.filterVisibleSeriesPlaylists(langFiltered, visibleSeriesCategoryIds).series
+                ContentFilters.filterSeriesInSelectedPlaylists(it, englishVodOnly, visibleSeriesCategoryIds).series
             }.orEmpty()
         }
         GlobalSearchDialog(

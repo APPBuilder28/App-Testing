@@ -150,4 +150,80 @@ class ContentFiltersTest {
         assertEquals(listOf("1"), seriesSubset.categories.map { it.categoryId })
         assertEquals(listOf("300"), seriesSubset.series.map { it.seriesId })
     }
+
+    @Test
+    fun searchScopeHelpersExcludeItemsOutsideSelectedPlaylistsAndActiveChip() {
+        val moviesData = MoviesCatalogData(
+            categories = listOf(
+                XtreamCategory("1", "ENG | Action"),
+                XtreamCategory("2", "ENG | Comedy"),
+                XtreamCategory("3", "ES | Accion")
+            ),
+            movies = listOf(
+                XtreamMovie(streamId = "10", name = "Die Hard", categoryId = "1"),
+                XtreamMovie(streamId = "20", name = "Die Laughing", categoryId = "2"),
+                XtreamMovie(streamId = "30", name = "Die Hard (English)", categoryId = "3")
+            )
+        )
+
+        // When English VOD is on and no custom Edit Playlists override is saved,
+        // items in non-English playlists should NOT leak into the visible playlist search scope.
+        val englishScoped = ContentFilters.filterMoviesInSelectedPlaylists(
+            data = moviesData,
+            englishOnly = true,
+            visibleCategoryIds = null
+        )
+        assertEquals(listOf("10", "20"), englishScoped.movies.map { it.streamId })
+
+        // Custom Edit Playlists selection restricts search strictly to chosen playlists
+        val customScoped = ContentFilters.filterMoviesInSelectedPlaylists(
+            data = moviesData,
+            englishOnly = false,
+            visibleCategoryIds = setOf("2", "3")
+        )
+        assertEquals(listOf("20", "30"), customScoped.movies.map { it.streamId })
+
+        // Active category chip further narrows search to that single playlist
+        val chipScoped = ContentFilters.filterMoviesInSelectedPlaylists(
+            data = moviesData,
+            englishOnly = false,
+            visibleCategoryIds = setOf("1", "2"),
+            activeCategoryId = "1"
+        )
+        assertEquals(listOf("10"), chipScoped.movies.map { it.streamId })
+
+        val seriesData = SeriesCatalogData(
+            categories = listOf(
+                XtreamCategory("1", "English Drama"),
+                XtreamCategory("2", "English Sci-Fi"),
+                XtreamCategory("3", "FR | Series")
+            ),
+            series = listOf(
+                XtreamSeries(seriesId = "100", name = "Dark Matter", categoryId = "1"),
+                XtreamSeries(seriesId = "200", name = "Dark Space", categoryId = "2"),
+                XtreamSeries(seriesId = "300", name = "Dark [ENG]", categoryId = "3")
+            )
+        )
+
+        val seriesEnglishScoped = ContentFilters.filterSeriesInSelectedPlaylists(
+            data = seriesData,
+            englishOnly = true,
+            visibleCategoryIds = null
+        )
+        assertEquals(listOf("100", "200"), seriesEnglishScoped.series.map { it.seriesId })
+
+        val seriesCustomScoped = ContentFilters.filterSeriesInSelectedPlaylists(
+            data = seriesData,
+            englishOnly = false,
+            visibleCategoryIds = setOf("2")
+        )
+        assertEquals(listOf("200"), seriesCustomScoped.series.map { it.seriesId })
+
+        val seriesDeselectedAll = ContentFilters.filterSeriesInSelectedPlaylists(
+            data = seriesData,
+            englishOnly = false,
+            visibleCategoryIds = emptySet()
+        )
+        assertTrue(seriesDeselectedAll.series.isEmpty())
+    }
 }

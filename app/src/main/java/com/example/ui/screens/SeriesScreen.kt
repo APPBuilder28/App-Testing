@@ -168,8 +168,12 @@ fun SeriesScreen(
                 val baseCountsByCategory = remember(baseData.series) {
                     baseData.series.groupingBy { it.categoryId }.eachCount()
                 }
-                val effectiveData = remember(baseData, visibleCategoryIds) {
-                    ContentFilters.filterVisibleSeriesPlaylists(baseData, visibleCategoryIds)
+                val effectiveData = remember(seriesState.data, englishOnly, visibleCategoryIds) {
+                    ContentFilters.filterSeriesInSelectedPlaylists(
+                        data = seriesState.data,
+                        englishOnly = englishOnly,
+                        visibleCategoryIds = visibleCategoryIds
+                    )
                 }
                 val categories = effectiveData.categories
                 val availableYears = remember(effectiveData.series) {
@@ -180,10 +184,21 @@ fun SeriesScreen(
                 val activeCategoryId = selectedCategoryId?.takeIf { sel ->
                     categories.any { it.categoryId == sel }
                 }
+                val activeCategoryName = remember(categories, activeCategoryId) {
+                    activeCategoryId?.let { id -> categories.firstOrNull { it.categoryId == id }?.categoryName }
+                }
+
+                val searchScopeSeries = remember(seriesState.data, englishOnly, visibleCategoryIds, activeCategoryId) {
+                    ContentFilters.filterSeriesInSelectedPlaylists(
+                        data = seriesState.data,
+                        englishOnly = englishOnly,
+                        visibleCategoryIds = visibleCategoryIds,
+                        activeCategoryId = activeCategoryId
+                    ).series
+                }
 
                 val filtered = remember(
-                    effectiveData.series,
-                    activeCategoryId,
+                    searchScopeSeries,
                     selectedYear,
                     minRating,
                     sortOption,
@@ -191,13 +206,12 @@ fun SeriesScreen(
                     favoriteIds,
                     searchQuery
                 ) {
-                    val base = effectiveData.series.filter { s ->
-                        val catOk = activeCategoryId == null || s.categoryId == activeCategoryId
+                    val base = searchScopeSeries.filter { s ->
                         val yearOk = selectedYear == null || s.year == selectedYear
                         val ratingOk = s.rating >= minRating
                         val favOk = !favoritesOnly || favoriteIds.contains(s.seriesId)
                         val searchOk = searchQuery.isBlank() || s.name.contains(searchQuery, ignoreCase = true)
-                        catOk && yearOk && ratingOk && favOk && searchOk
+                        yearOk && ratingOk && favOk && searchOk
                     }
                     when (sortOption) {
                         MediaSortOption.RECENT -> base.sortedByDescending { it.lastModified }
@@ -207,11 +221,24 @@ fun SeriesScreen(
                     }
                 }
 
+                val searchPlaceholder = remember(activeCategoryName, visibleCategoryIds, categories.size) {
+                    when {
+                        activeCategoryName != null -> "Search series in $activeCategoryName..."
+                        visibleCategoryIds != null && categories.isEmpty() -> "No series playlists selected"
+                        visibleCategoryIds != null -> {
+                            val noun = if (categories.size == 1) "playlist" else "playlists"
+                            "Search series in ${categories.size} selected $noun..."
+                        }
+                        categories.isNotEmpty() -> "Search series in ${categories.size} playlists..."
+                        else -> "Search series..."
+                    }
+                }
+
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     ClickToEditSearchBar(
                         query = searchQuery,
                         onQueryChange = { searchQuery = it },
-                        placeholder = strings.searchHint,
+                        placeholder = searchPlaceholder,
                         height = 50.dp,
                         shape = RoundedCornerShape(12.dp),
                         testTag = "series_search_input",
