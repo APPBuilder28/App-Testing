@@ -29,7 +29,20 @@ class SourceRepository(
     fun refreshFromStorage() {
         val loaded = secureStorage.loadSources()
         _sources.value = loaded
-        _activeSource.value = loaded.firstOrNull { it.isActive } ?: loaded.firstOrNull()
+        _activeSource.value = loaded.firstOrNull { it.isActive }
+    }
+
+    fun normalizeServerUrl(serverUrl: String): String {
+        return apiService.normalizeServerUrl(serverUrl) ?: serverUrl.trim().trimEnd('/')
+    }
+
+    fun isDuplicateSource(serverUrl: String, username: String): Boolean {
+        val normalizedUrl = normalizeServerUrl(serverUrl).lowercase()
+        val normalizedUser = username.trim()
+        return _sources.value.any { existing ->
+            normalizeServerUrl(existing.serverUrl).lowercase() == normalizedUrl &&
+                existing.username.trim() == normalizedUser
+        }
     }
 
     suspend fun testConnection(
@@ -38,6 +51,36 @@ class SourceRepository(
         password: String
     ): ApiResult<XtreamConnectionResult> {
         return apiService.testAndAuthenticate(serverUrl, username, password)
+    }
+
+    fun addImportedSource(
+        sourceName: String,
+        serverUrl: String,
+        username: String,
+        password: String,
+        expiryDate: String,
+        connectionResult: XtreamConnectionResult
+    ): XtreamSourceProfile {
+        val normalizedUrl = normalizeServerUrl(serverUrl)
+        val current = _sources.value.toMutableList()
+        val profile = XtreamSourceProfile(
+            id = UUID.randomUUID().toString(),
+            sourceName = sourceName.trim().ifBlank { "Xtream Source" },
+            serverUrl = normalizedUrl,
+            username = username.trim(),
+            password = password,
+            isActive = false,
+            lastVerifiedEpochMs = System.currentTimeMillis(),
+            accountStatus = connectionResult.status,
+            expDate = connectionResult.expDate?.takeIf { it.isNotBlank() } ?: expiryDate.takeIf { it.isNotBlank() },
+            activeConnections = connectionResult.activeConnections,
+            maxConnections = connectionResult.maxConnections
+        )
+        current.add(profile)
+        secureStorage.saveSources(current)
+        _sources.value = current
+        _activeSource.value = current.firstOrNull { it.isActive }
+        return profile
     }
 
     fun addOrUpdateSource(
@@ -49,7 +92,7 @@ class SourceRepository(
         connectionResult: XtreamConnectionResult,
         makeActive: Boolean
     ): XtreamSourceProfile {
-        val normalizedUrl = apiService.normalizeServerUrl(serverUrl) ?: serverUrl.trim().trimEnd('/')
+        val normalizedUrl = normalizeServerUrl(serverUrl)
         val current = _sources.value.toMutableList()
         val id = existingId ?: UUID.randomUUID().toString()
         val shouldActivate = makeActive || current.isEmpty() || current.none { it.isActive }
@@ -83,7 +126,7 @@ class SourceRepository(
 
         secureStorage.saveSources(updatedList)
         _sources.value = updatedList
-        _activeSource.value = updatedList.firstOrNull { it.isActive } ?: updatedList.firstOrNull()
+        _activeSource.value = updatedList.firstOrNull { it.isActive }
         return profile
     }
 

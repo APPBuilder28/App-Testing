@@ -69,10 +69,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -182,7 +186,7 @@ data class LiveTvUiMetrics(
                 heroProgressWidth = lerp(48.dp, 110.dp, t),
                 previewWidth = if (isCompact) lerp(94.dp, 160.dp, t) else lerp(116.dp, 260.dp, t),
                 previewControlSize = lerp(20.dp, 30.dp, t),
-                sidebarWidth = if (isCompact) lerp(102.dp, 156.dp, t) else lerp(136.dp, 216.dp, t),
+                sidebarWidth = if (isCompact) lerp(136.dp, 196.dp, t) else lerp(176.dp, 256.dp, t),
                 playlistHeaderPad = lerp(5.dp, 10.dp, t),
                 playlistRowPadV = lerp(3.dp, 9.dp, t),
                 playlistFontSp = lerpSp(10.sp, 13.sp, t),
@@ -1039,12 +1043,24 @@ private fun PlaylistSidebarRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isFocused by remember { mutableStateOf(false) }
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(7.dp),
-        color = if (selected) ElectricCyan.copy(alpha = 0.16f) else Color.Transparent,
-        border = if (selected) BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.65f)) else null,
-        modifier = modifier.fillMaxWidth()
+        color = when {
+            isFocused -> ElectricCyan.copy(alpha = 0.24f)
+            selected -> ElectricCyan.copy(alpha = 0.16f)
+            else -> Color.Transparent
+        },
+        border = when {
+            isFocused -> BorderStroke(2.dp, ElectricCyan)
+            selected -> BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.65f))
+            else -> null
+        },
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused }
     ) {
         Row(
             modifier = Modifier
@@ -1056,22 +1072,22 @@ private fun PlaylistSidebarRow(
             Icon(
                 imageVector = if (isSpecial) Icons.Rounded.PlaylistPlay else Icons.Rounded.Folder,
                 contentDescription = null,
-                tint = if (selected) ElectricCyan else TextMuted,
+                tint = if (selected || isFocused) ElectricCyan else TextMuted,
                 modifier = Modifier.size(metrics.playlistIconSize)
             )
             Text(
                 text = label,
                 fontSize = metrics.playlistFontSp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) ElectricCyan else TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                lineHeight = (metrics.playlistFontSp.value * 1.22f).sp,
+                fontWeight = if (selected || isFocused) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected || isFocused) ElectricCyan else TextPrimary,
+                softWrap = true,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = "$count",
                 fontSize = metrics.playlistCountSp,
-                color = if (selected) ElectricCyan else TextMuted
+                color = if (selected || isFocused) ElectricCyan else TextMuted
             )
         }
     }

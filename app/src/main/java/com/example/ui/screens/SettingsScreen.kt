@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
@@ -34,7 +40,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -48,11 +53,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,10 +69,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.core.i18n.AppLanguage
 import com.example.core.i18n.LocalAppStrings
+import com.example.core.security.ImportedSourceDraft
+import com.example.core.security.JsonParseResult
+import com.example.core.security.JsonSourceImporter
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.SubtitleColorOption
 import com.example.data.local.UserSettings
 import com.example.data.local.VideoQualityPreset
+import com.example.ui.components.ImportCredentialsWarningDialog
+import com.example.ui.components.ImportProgressDialog
+import com.example.ui.components.ImportSourcesPreviewDialog
 import com.example.ui.components.LegalDisclaimerBanner
 import com.example.ui.components.NextVuTopBar
 import com.example.ui.theme.BgCharcoal
@@ -77,6 +91,8 @@ import com.example.ui.theme.SurfaceCardVariant
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.viewmodel.SourceImportSummary
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -100,14 +116,37 @@ fun SettingsScreen(
     onVerifyAndDisableParentalPin: (String) -> Boolean,
     onClearActiveSourceHistory: () -> Unit,
     onClearAllSourcesHistory: () -> Unit,
-    onResetAllSources: () -> Unit
+    onResetAllSources: () -> Unit,
+    onCheckDuplicateSource: (ImportedSourceDraft) -> Boolean,
+    onImportSourcesBatch: suspend (List<ImportedSourceDraft>, (Int, Int, String) -> Unit) -> SourceImportSummary
 ) {
     val strings = LocalAppStrings.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     var showPinDialog by remember { mutableStateOf(false) }
     var pinDialogIsDisabling by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showResetSourcesDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+
+    var parsedSourcesForPreview by remember { mutableStateOf<List<ImportedSourceDraft>?>(null) }
+    var pendingSourcesAfterWarning by remember { mutableStateOf<List<ImportedSourceDraft>?>(null) }
+    var importProgress by remember { mutableStateOf<Triple<Int, Int, String>?>(null) }
+
+    val jsonPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        when (val result = JsonSourceImporter.readFromUri(context, uri)) {
+            is JsonParseResult.Success -> {
+                parsedSourcesForPreview = result.sources
+            }
+            is JsonParseResult.Error -> {
+                Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -317,33 +356,59 @@ fun SettingsScreen(
             // Data & Source Management Actions
             item {
                 SettingsCard(icon = Icons.Rounded.DeleteSweep, title = "History & Source Data") {
-                    OutlinedButton(
-                        onClick = { showClearHistoryDialog = true },
-                        border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.55f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .minimumInteractiveComponentSize()
-                            .testTag("settings_clear_history_button")
-                    ) {
-                        Icon(Icons.Rounded.DeleteSweep, contentDescription = null, tint = ElectricCyan)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(strings.clearHistoryProgress, color = TextPrimary)
-                    }
+                    SettingsActionButton(
+                        icon = Icons.Rounded.FileUpload,
+                        label = "Import Sources (JSON File)",
+                        tint = ElectricCyan,
+                        borderColor = ElectricCyan.copy(alpha = 0.55f),
+                        onClick = {
+                            try {
+                                jsonPickerLauncher.launch(arrayOf("application/json", "text/json"))
+                            } catch (_: SecurityException) {
+                                Toast.makeText(
+                                    context,
+                                    "Permission denied: Unable to open device storage picker.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } catch (_: ActivityNotFoundException) {
+                                Toast.makeText(
+                                    context,
+                                    "No file picker application is available on this device.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } catch (_: Exception) {
+                                Toast.makeText(
+                                    context,
+                                    "Failed to launch JSON file picker.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        },
+                        modifier = Modifier.testTag("settings_import_sources_json_button")
+                    )
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    OutlinedButton(
+                    SettingsActionButton(
+                        icon = Icons.Rounded.DeleteSweep,
+                        label = strings.clearHistoryProgress,
+                        tint = ElectricCyan,
+                        borderColor = ElectricCyan.copy(alpha = 0.55f),
+                        onClick = { showClearHistoryDialog = true },
+                        modifier = Modifier.testTag("settings_clear_history_button")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    SettingsActionButton(
+                        icon = Icons.Rounded.DeleteForever,
+                        label = strings.resetAllSources,
+                        tint = ErrorRose,
+                        labelColor = ErrorRose,
+                        borderColor = ErrorRose.copy(alpha = 0.65f),
                         onClick = { showResetSourcesDialog = true },
-                        border = BorderStroke(1.dp, ErrorRose.copy(alpha = 0.65f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .minimumInteractiveComponentSize()
-                            .testTag("settings_reset_sources_button")
-                    ) {
-                        Icon(Icons.Rounded.DeleteForever, contentDescription = null, tint = ErrorRose)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(strings.resetAllSources, color = ErrorRose)
-                    }
+                        modifier = Modifier.testTag("settings_reset_sources_button")
+                    )
                 }
             }
 
@@ -543,6 +608,111 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+
+    parsedSourcesForPreview?.let { parsed ->
+        ImportSourcesPreviewDialog(
+            sources = parsed,
+            isDuplicateCheck = onCheckDuplicateSource,
+            cancelLabel = strings.cancel,
+            onConfirmSelection = { chosen ->
+                parsedSourcesForPreview = null
+                pendingSourcesAfterWarning = chosen
+            },
+            onDismiss = { parsedSourcesForPreview = null }
+        )
+    }
+
+    pendingSourcesAfterWarning?.let { chosen ->
+        ImportCredentialsWarningDialog(
+            selectedCount = chosen.size,
+            cancelLabel = strings.cancel,
+            onConfirmImport = {
+                pendingSourcesAfterWarning = null
+                coroutineScope.launch {
+                    importProgress = Triple(1, chosen.size, chosen.firstOrNull()?.sourceName.orEmpty())
+                    val summary = onImportSourcesBatch(chosen) { current, total, name ->
+                        importProgress = Triple(current, total, name)
+                    }
+                    importProgress = null
+
+                    val feedbackParts = mutableListOf<String>()
+                    if (summary.importedCount > 0) {
+                        feedbackParts.add(
+                            "Imported ${summary.importedCount} source(s). Go to Sources Manager to Set Active Source."
+                        )
+                    }
+                    if (summary.skippedDuplicatesCount > 0) {
+                        feedbackParts.add("Skipped ${summary.skippedDuplicatesCount} duplicate source(s).")
+                    }
+                    if (summary.failedConnectionCount > 0) {
+                        feedbackParts.add("${summary.failedConnectionCount} source(s) failed connection test.")
+                    }
+                    val message = if (feedbackParts.isEmpty()) {
+                        "No sources imported."
+                    } else {
+                        feedbackParts.joinToString(" ")
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                }
+            },
+            onDismiss = { pendingSourcesAfterWarning = null }
+        )
+    }
+
+    importProgress?.let { (current, total, name) ->
+        ImportProgressDialog(
+            current = current,
+            total = total,
+            currentSourceName = name
+        )
+    }
+}
+
+@Composable
+private fun SettingsActionButton(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    borderColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    labelColor: Color = TextPrimary
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(999.dp),
+        color = if (isFocused) ElectricCyan.copy(alpha = 0.18f) else Color.Transparent,
+        border = BorderStroke(
+            width = if (isFocused) 2.5.dp else 1.dp,
+            color = if (isFocused) ElectricCyan else borderColor
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { isFocused = it.isFocused }
+            .minimumInteractiveComponentSize()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isFocused) ElectricCyan else tint
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isFocused && labelColor == TextPrimary) Color.White else labelColor
+            )
+        }
     }
 }
 

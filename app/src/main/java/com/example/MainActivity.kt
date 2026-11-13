@@ -553,7 +553,13 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 },
                                 onClearActiveSourceHistory = { viewModel.clearHistoryForActiveSource() },
                                 onClearAllSourcesHistory = { viewModel.clearHistoryForAllSources() },
-                                onResetAllSources = { viewModel.resetAllSources() }
+                                onResetAllSources = { viewModel.resetAllSources() },
+                                onCheckDuplicateSource = { draft ->
+                                    viewModel.isDuplicateSource(draft.serverUrl, draft.username)
+                                },
+                                onImportSourcesBatch = { selected, onProgress ->
+                                    viewModel.importValidatedSources(selected, onProgress)
+                                }
                             )
                         }
                     }

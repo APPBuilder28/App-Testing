@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.core.i18n.AppLanguage
+import com.example.core.security.ImportedSourceDraft
 import com.example.core.security.SecureSourceStorage
 import com.example.core.security.XtreamSourceProfile
 import com.example.data.local.MediaContentType
@@ -100,6 +101,13 @@ data class MoviesCatalogData(
 data class SeriesCatalogData(
     val categories: List<XtreamCategory>,
     val series: List<XtreamSeries>
+)
+
+data class SourceImportSummary(
+    val importedCount: Int,
+    val skippedDuplicatesCount: Int,
+    val failedConnectionCount: Int,
+    val failedSourceNames: List<String> = emptyList()
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -598,6 +606,53 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             sourceRepository.resetAllSources()
         }
+    }
+
+    fun isDuplicateSource(serverUrl: String, username: String): Boolean {
+        return sourceRepository.isDuplicateSource(serverUrl, username)
+    }
+
+    suspend fun importValidatedSources(
+        selectedSources: List<ImportedSourceDraft>,
+        onProgress: (current: Int, total: Int, currentName: String) -> Unit
+    ): SourceImportSummary {
+        var imported = 0
+        var skippedDuplicates = 0
+        var failedConnections = 0
+        val failedNames = mutableListOf<String>()
+        val total = selectedSources.size
+
+        selectedSources.forEachIndexed { index, draft ->
+            onProgress(index + 1, total, draft.sourceName)
+            if (sourceRepository.isDuplicateSource(draft.serverUrl, draft.username)) {
+                skippedDuplicates++
+            } else {
+                when (val res = sourceRepository.testConnection(draft.serverUrl, draft.username, draft.password)) {
+                    is ApiResult.Success -> {
+                        sourceRepository.addImportedSource(
+                            sourceName = draft.sourceName,
+                            serverUrl = draft.serverUrl,
+                            username = draft.username,
+                            password = draft.password,
+                            expiryDate = draft.expiryDate,
+                            connectionResult = res.data
+                        )
+                        imported++
+                    }
+                    is ApiResult.Failure -> {
+                        failedConnections++
+                        failedNames.add(draft.sourceName)
+                    }
+                }
+            }
+        }
+
+        return SourceImportSummary(
+            importedCount = imported,
+            skippedDuplicatesCount = skippedDuplicates,
+            failedConnectionCount = failedConnections,
+            failedSourceNames = failedNames
+        )
     }
 
     // Settings & Parental PIN actions
