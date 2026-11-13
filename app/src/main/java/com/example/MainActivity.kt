@@ -374,7 +374,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 channelEpgMap = channelEpgMap,
                                 settings = settings,
                                 isFullScreenPlayerOpen = activePlaybackTarget != null,
-                                buildStreamUrl = { ch -> viewModel.buildLivePreviewUrl(ch) },
+                                buildStreamUrl = { ch, useTsFallback -> viewModel.buildLivePreviewUrl(ch, useTsFallback) },
                                 onRefresh = { viewModel.refreshLive() },
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
                                 onNavigateToSources = { navigateTopLevel(RouteSources(false)) },

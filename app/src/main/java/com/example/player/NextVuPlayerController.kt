@@ -19,10 +19,13 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import com.example.data.local.VideoQualityPreset
@@ -101,19 +104,32 @@ class NextVuPlayerController(private val context: Context) {
     val state: StateFlow<PlayerTelemetryState> = _state.asStateFlow()
 
     val exoPlayer: ExoPlayer
+    @Volatile
+    private var isReleased = false
 
     init {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("NextVuPlayer/1.1 (Android)")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(15_000)
+
+        val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+
         val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                15_000, // minBufferMs
-                50_000, // maxBufferMs for high-bitrate 4K/HEVC
-                2_500,  // bufferForPlaybackMs
-                5_000   // bufferForPlaybackAfterRebufferMs
+                10_000, // minBufferMs
+                25_000, // maxBufferMs (capped to prevent RAM pressure alongside large catalogs)
+                2_000,  // bufferForPlaybackMs
+                4_000   // bufferForPlaybackAfterRebufferMs
             )
+            .setPrioritizeTimeOverSizeThresholds(false)
             .build()
 
         val audioAttributes = AudioAttributes.Builder()
@@ -122,6 +138,7 @@ class NextVuPlayerController(private val context: Context) {
             .build()
 
         exoPlayer = ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setBandwidthMeter(bandwidthMeter)
@@ -135,11 +152,17 @@ class NextVuPlayerController(private val context: Context) {
     private fun attachListeners() {
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (isReleased) return
+                val dur = try {
+                    exoPlayer.duration.coerceAtLeast(0L)
+                } catch (_: Throwable) {
+                    0L
+                }
                 _state.update {
                     it.copy(
                         isBuffering = playbackState == Player.STATE_BUFFERING,
                         playbackEnded = playbackState == Player.STATE_ENDED,
-                        durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                        durationMs = dur
                     )
                 }
             }
@@ -310,100 +333,178 @@ class NextVuPlayerController(private val context: Context) {
         startPositionMs: Long = 0L,
         qualityPreset: VideoQualityPreset = VideoQualityPreset.AUTO
     ) {
-        applyQualityPreset(qualityPreset)
-        _state.update {
-            it.copy(
-                isBuffering = true,
-                errorMessage = null,
-                playbackEnded = false,
-                hdrType = HdrBadgeType.NONE
-            )
+        if (isReleased) return
+        val trimmedUrl = streamUrl.trim()
+        if (trimmedUrl.isBlank()) {
+            _state.update {
+                it.copy(
+                    isBuffering = false,
+                    isPlaying = false,
+                    errorMessage = "Empty stream URL"
+                )
+            }
+            return
         }
-        val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(streamUrl))
-            .build()
-        exoPlayer.setMediaItem(mediaItem)
-        exoPlayer.prepare()
-        if (startPositionMs > 2_000L) {
-            exoPlayer.seekTo(startPositionMs)
+        try {
+            applyQualityPreset(qualityPreset)
+            _state.update {
+                it.copy(
+                    isBuffering = true,
+                    errorMessage = null,
+                    playbackEnded = false,
+                    hdrType = HdrBadgeType.NONE
+                )
+            }
+            val mediaItem = MediaItem.Builder()
+                .setUri(Uri.parse(trimmedUrl))
+                .build()
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            if (startPositionMs > 2_000L) {
+                exoPlayer.seekTo(startPositionMs)
+            }
+            exoPlayer.playWhenReady = true
+        } catch (t: Throwable) {
+            _state.update {
+                it.copy(
+                    isBuffering = false,
+                    isPlaying = false,
+                    errorMessage = t.localizedMessage ?: "Failed to load stream"
+                )
+            }
         }
-        exoPlayer.playWhenReady = true
+    }
+
+    fun stopAndClear() {
+        if (isReleased) return
+        try {
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+            _state.update {
+                it.copy(
+                    isBuffering = false,
+                    isPlaying = false,
+                    errorMessage = null
+                )
+            }
+        } catch (_: Throwable) {
+        }
     }
 
     fun applyQualityPreset(preset: VideoQualityPreset) {
-        val builder = trackSelector.buildUponParameters()
-        if (preset.maxHeightPx == null) {
-            builder.clearVideoSizeConstraints()
-        } else {
-            val maxWidth = when (preset) {
-                VideoQualityPreset.HD_720 -> 1280
-                VideoQualityPreset.FHD_1080 -> 1920
-                VideoQualityPreset.UHD_4K -> 3840
-                VideoQualityPreset.AUTO -> Int.MAX_VALUE
+        if (isReleased) return
+        try {
+            val builder = trackSelector.buildUponParameters()
+            if (preset.maxHeightPx == null) {
+                builder.clearVideoSizeConstraints()
+            } else {
+                val maxWidth = when (preset) {
+                    VideoQualityPreset.HD_720 -> 1280
+                    VideoQualityPreset.FHD_1080 -> 1920
+                    VideoQualityPreset.UHD_4K -> 3840
+                    VideoQualityPreset.AUTO -> Int.MAX_VALUE
+                }
+                builder.setMaxVideoSize(maxWidth, preset.maxHeightPx)
             }
-            builder.setMaxVideoSize(maxWidth, preset.maxHeightPx)
+            trackSelector.setParameters(builder)
+            _state.update { it.copy(selectedQuality = preset) }
+        } catch (_: Throwable) {
         }
-        trackSelector.setParameters(builder)
-        _state.update { it.copy(selectedQuality = preset) }
     }
 
     fun selectAudioTrack(track: MediaTrackInfo) {
-        val groups = exoPlayer.currentTracks.groups
-        val group = groups.getOrNull(track.groupIndex) ?: return
-        val params = trackSelector.buildUponParameters()
-            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex))
-            .build()
-        trackSelector.setParameters(params)
+        if (isReleased) return
+        try {
+            val groups = exoPlayer.currentTracks.groups
+            val group = groups.getOrNull(track.groupIndex) ?: return
+            val params = trackSelector.buildUponParameters()
+                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex))
+                .build()
+            trackSelector.setParameters(params)
+        } catch (_: Throwable) {
+        }
     }
 
     fun selectSubtitleTrack(track: MediaTrackInfo?) {
-        val builder = trackSelector.buildUponParameters()
-        if (track == null) {
-            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-        } else {
-            val group = exoPlayer.currentTracks.groups.getOrNull(track.groupIndex) ?: return
-            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex))
+        if (isReleased) return
+        try {
+            val builder = trackSelector.buildUponParameters()
+            if (track == null) {
+                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            } else {
+                val group = exoPlayer.currentTracks.groups.getOrNull(track.groupIndex) ?: return
+                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track.trackIndex))
+            }
+            trackSelector.setParameters(builder.build())
+        } catch (_: Throwable) {
         }
-        trackSelector.setParameters(builder.build())
     }
 
     fun togglePlayPause() {
-        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+        if (isReleased) return
+        try {
+            if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+        } catch (_: Throwable) {
+        }
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
-        syncPosition()
+        if (isReleased) return
+        try {
+            exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
+            syncPosition()
+        } catch (_: Throwable) {
+        }
     }
 
     fun seekBy(deltaMs: Long) {
-        val target = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, exoPlayer.duration.coerceAtLeast(Long.MAX_VALUE))
-        exoPlayer.seekTo(target)
-        syncPosition()
+        if (isReleased) return
+        try {
+            val dur = exoPlayer.duration
+            val maxBound = if (dur > 0L) dur else Long.MAX_VALUE
+            val target = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, maxBound)
+            exoPlayer.seekTo(target)
+            syncPosition()
+        } catch (_: Throwable) {
+        }
     }
 
     fun setVolume(volume: Float) {
-        val clamped = volume.coerceIn(0f, 1f)
-        exoPlayer.volume = clamped
-        _state.update { it.copy(volume = clamped) }
+        if (isReleased) return
+        try {
+            val clamped = volume.coerceIn(0f, 1f)
+            exoPlayer.volume = clamped
+            _state.update { it.copy(volume = clamped) }
+        } catch (_: Throwable) {
+        }
     }
 
     fun syncPosition() {
-        val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
-        val dur = exoPlayer.duration.coerceAtLeast(0L)
-        val estimatedKbps = (bandwidthMeter.bitrateEstimate / 1000L).coerceAtLeast(0L)
-        _state.update {
-            it.copy(
-                positionMs = pos,
-                durationMs = dur,
-                bitrateKbps = if (estimatedKbps > 0L) estimatedKbps else it.bitrateKbps
-            )
+        if (isReleased) return
+        try {
+            val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+            val dur = exoPlayer.duration.coerceAtLeast(0L)
+            val estimatedKbps = (bandwidthMeter.bitrateEstimate / 1000L).coerceAtLeast(0L)
+            _state.update {
+                it.copy(
+                    positionMs = pos,
+                    durationMs = dur,
+                    bitrateKbps = if (estimatedKbps > 0L) estimatedKbps else it.bitrateKbps
+                )
+            }
+        } catch (_: Throwable) {
         }
     }
 
     fun release() {
-        exoPlayer.release()
+        if (isReleased) return
+        isReleased = true
+        try {
+            exoPlayer.clearVideoSurface()
+            exoPlayer.release()
+        } catch (_: Throwable) {
+        }
     }
 
     companion object {

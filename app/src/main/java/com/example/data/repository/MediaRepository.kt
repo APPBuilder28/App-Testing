@@ -1,8 +1,7 @@
 package com.example.data.repository
 
+import android.content.Context
 import com.example.core.security.XtreamSourceProfile
-import com.example.data.local.CachedCatalogEntity
-import com.example.data.local.NextVuDatabase
 import com.example.data.remote.ApiResult
 import com.example.data.remote.XtreamApiService
 import com.example.data.remote.XtreamCategory
@@ -11,10 +10,21 @@ import com.example.data.remote.XtreamLiveChannel
 import com.example.data.remote.XtreamMovie
 import com.example.data.remote.XtreamSeries
 import com.example.data.remote.XtreamSeriesDetails
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 data class LiveCatalogBundle(
     val categories: List<XtreamCategory>,
@@ -36,13 +46,15 @@ data class SeriesCatalogBundle(
 
 /**
  * Fetches dynamic Live TV, EPG, Movies, and Series exclusively from the active Xtream source,
- * with per-source Room offline caching when network/API fails.
+ * with streaming GZIP file offline caching per source (avoids SQLite CursorWindow limits and heap spikes).
  */
 class MediaRepository(
-    private val apiService: XtreamApiService,
-    private val database: NextVuDatabase
+    context: Context,
+    private val apiService: XtreamApiService
 ) {
-    private val cacheDao = database.cachedCatalogDao()
+    private val cacheDir = File(context.applicationContext.filesDir, "catalog_cache").apply {
+        mkdirs()
+    }
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     suspend fun fetchLiveCatalog(
@@ -72,12 +84,7 @@ class MediaRepository(
             )
         }
 
-        val err = (streamRes as? ApiResult.Failure) ?: (catRes as ApiResult.Failure)!!
-        if (cachedCats != null && cachedStreams != null) {
-            // Even on force refresh, return error or cache? We expose the failure so offline mode shows!
-            return@coroutineScope err
-        }
-        err
+        (streamRes as? ApiResult.Failure) ?: (catRes as ApiResult.Failure)!!
     }
 
     suspend fun fetchMoviesCatalog(
@@ -178,27 +185,46 @@ class MediaRepository(
     fun buildEpisodeUrl(source: XtreamSourceProfile, episodeId: String, ext: String): String =
         apiService.buildSeriesEpisodeUrl(source, episodeId, ext)
 
+    private fun cacheFileFor(sourceId: String, key: String): File {
+        val safeSource = sourceId.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        val safeKey = key.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        return File(cacheDir, "${safeSource}__${safeKey}.json.gz")
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
     private suspend inline fun <reified T> saveCache(sourceId: String, key: String, value: T) {
-        try {
-            val payload = json.encodeToString(value)
-            cacheDao.putCache(
-                CachedCatalogEntity(
-                    sourceId = sourceId,
-                    cacheKey = key,
-                    payloadJson = payload
-                )
-            )
-        } catch (_: Exception) {
-            // Best-effort offline cache
+        withContext(Dispatchers.IO) {
+            val targetFile = cacheFileFor(sourceId, key)
+            val tempFile = File(cacheDir, "${targetFile.name}.tmp")
+            try {
+                GZIPOutputStream(BufferedOutputStream(FileOutputStream(tempFile), 16 * 1024)).use { gzOut ->
+                    json.encodeToStream(value, gzOut)
+                }
+                if (targetFile.exists()) {
+                    targetFile.delete()
+                }
+                if (!tempFile.renameTo(targetFile)) {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                }
+            } catch (_: Throwable) {
+                runCatching { tempFile.delete() }
+            }
         }
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     private suspend inline fun <reified T> loadCache(sourceId: String, key: String): T? {
-        return try {
-            val entry = cacheDao.getCache(sourceId, key) ?: return null
-            json.decodeFromString<T>(entry.payloadJson)
-        } catch (_: Exception) {
-            null
+        return withContext(Dispatchers.IO) {
+            val targetFile = cacheFileFor(sourceId, key)
+            if (!targetFile.exists()) return@withContext null
+            try {
+                GZIPInputStream(BufferedInputStream(FileInputStream(targetFile), 16 * 1024)).use { gzIn ->
+                    json.decodeFromStream<T>(gzIn)
+                }
+            } catch (_: Throwable) {
+                null
+            }
         }
     }
 

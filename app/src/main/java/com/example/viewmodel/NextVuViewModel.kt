@@ -30,6 +30,7 @@ import com.example.data.repository.MediaRepository
 import com.example.data.repository.PerSourceDataRepository
 import com.example.data.repository.SourceRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +40,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 sealed interface CatalogUiState<out T> {
     data object Idle : CatalogUiState<Nothing>
@@ -106,7 +109,7 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
     private val secureStorage = SecureSourceStorage(application)
     private val apiService = XtreamApiService()
     private val sourceRepository = SourceRepository(secureStorage, apiService, database)
-    private val mediaRepository = MediaRepository(apiService, database)
+    private val mediaRepository = MediaRepository(application, apiService)
     private val perSourceRepo = PerSourceDataRepository(database)
     private val settingsRepo = SettingsRepository(application)
 
@@ -179,12 +182,15 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
     private val _activePlaybackTarget = MutableStateFlow<PlaybackTarget?>(null)
     val activePlaybackTarget: StateFlow<PlaybackTarget?> = _activePlaybackTarget.asStateFlow()
 
+    private var catalogLoadJob: Job? = null
+
     init {
         viewModelScope.launch {
             activeSource.collect { source ->
                 if (source != null) {
                     loadAllCatalogsForSource(source, forceRefresh = false)
                 } else {
+                    catalogLoadJob?.cancel()
                     _liveState.value = CatalogUiState.Idle
                     _moviesState.value = CatalogUiState.Idle
                     _seriesState.value = CatalogUiState.Idle
@@ -195,13 +201,17 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun loadAllCatalogsForSource(source: XtreamSourceProfile, forceRefresh: Boolean) {
-        loadLiveCatalog(source, forceRefresh)
-        loadMoviesCatalog(source, forceRefresh)
-        loadSeriesCatalog(source, forceRefresh)
+        catalogLoadJob?.cancel()
+        catalogLoadJob = viewModelScope.launch {
+            loadLiveCatalog(source, forceRefresh)
+            loadMoviesCatalog(source, forceRefresh)
+            loadSeriesCatalog(source, forceRefresh)
+        }
     }
 
     fun refreshLive() {
         val src = activeSource.value ?: return
+        attemptedEpgIds.clear()
         viewModelScope.launch {
             _isRefreshingLive.value = true
             loadLiveCatalog(src, forceRefresh = true)
@@ -227,84 +237,92 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun loadLiveCatalog(source: XtreamSourceProfile, forceRefresh: Boolean) {
-        viewModelScope.launch {
-            if (!forceRefresh) _liveState.value = CatalogUiState.Loading
-            when (val res = mediaRepository.fetchLiveCatalog(source, forceRefresh)) {
-                is ApiResult.Success -> {
-                    _liveState.value = CatalogUiState.Success(
-                        LiveCatalogData(res.data.categories, res.data.channels),
-                        fromCache = res.fromCache
-                    )
-                    if (res.fromCache) {
-                        _isOfflineMode.value = true
-                        _offlineMessage.value = "Showing cached Live TV catalog (Offline)"
-                    } else {
-                        _isOfflineMode.value = false
-                        _offlineMessage.value = null
-                    }
-                }
-                is ApiResult.Failure -> {
-                    _liveState.value = CatalogUiState.Error(res.error)
+    private suspend fun loadLiveCatalog(source: XtreamSourceProfile, forceRefresh: Boolean) {
+        if (!forceRefresh) _liveState.value = CatalogUiState.Loading
+        when (val res = mediaRepository.fetchLiveCatalog(source, forceRefresh)) {
+            is ApiResult.Success -> {
+                _liveState.value = CatalogUiState.Success(
+                    LiveCatalogData(res.data.categories, res.data.channels),
+                    fromCache = res.fromCache
+                )
+                if (res.fromCache) {
                     _isOfflineMode.value = true
-                    _offlineMessage.value = res.error.userMessage
+                    _offlineMessage.value = "Showing cached Live TV catalog (Offline)"
+                } else {
+                    _isOfflineMode.value = false
+                    _offlineMessage.value = null
                 }
+            }
+            is ApiResult.Failure -> {
+                _liveState.value = CatalogUiState.Error(res.error)
+                _isOfflineMode.value = true
+                _offlineMessage.value = res.error.userMessage
             }
         }
     }
 
-    private fun loadMoviesCatalog(source: XtreamSourceProfile, forceRefresh: Boolean) {
-        viewModelScope.launch {
-            if (!forceRefresh) _moviesState.value = CatalogUiState.Loading
-            when (val res = mediaRepository.fetchMoviesCatalog(source, forceRefresh)) {
-                is ApiResult.Success -> {
-                    _moviesState.value = CatalogUiState.Success(
-                        MoviesCatalogData(res.data.categories, res.data.movies),
-                        fromCache = res.fromCache
-                    )
-                    if (!res.fromCache) _isOfflineMode.value = false
-                }
-                is ApiResult.Failure -> {
-                    _moviesState.value = CatalogUiState.Error(res.error)
-                    _isOfflineMode.value = true
-                    _offlineMessage.value = res.error.userMessage
-                }
+    private suspend fun loadMoviesCatalog(source: XtreamSourceProfile, forceRefresh: Boolean) {
+        if (!forceRefresh) _moviesState.value = CatalogUiState.Loading
+        when (val res = mediaRepository.fetchMoviesCatalog(source, forceRefresh)) {
+            is ApiResult.Success -> {
+                _moviesState.value = CatalogUiState.Success(
+                    MoviesCatalogData(res.data.categories, res.data.movies),
+                    fromCache = res.fromCache
+                )
+                if (!res.fromCache) _isOfflineMode.value = false
+            }
+            is ApiResult.Failure -> {
+                _moviesState.value = CatalogUiState.Error(res.error)
+                _isOfflineMode.value = true
+                _offlineMessage.value = res.error.userMessage
             }
         }
     }
 
-    private fun loadSeriesCatalog(source: XtreamSourceProfile, forceRefresh: Boolean) {
-        viewModelScope.launch {
-            if (!forceRefresh) _seriesState.value = CatalogUiState.Loading
-            when (val res = mediaRepository.fetchSeriesCatalog(source, forceRefresh)) {
-                is ApiResult.Success -> {
-                    _seriesState.value = CatalogUiState.Success(
-                        SeriesCatalogData(res.data.categories, res.data.series),
-                        fromCache = res.fromCache
-                    )
-                    if (!res.fromCache) _isOfflineMode.value = false
-                }
-                is ApiResult.Failure -> {
-                    _seriesState.value = CatalogUiState.Error(res.error)
-                    _isOfflineMode.value = true
-                    _offlineMessage.value = res.error.userMessage
-                }
+    private suspend fun loadSeriesCatalog(source: XtreamSourceProfile, forceRefresh: Boolean) {
+        if (!forceRefresh) _seriesState.value = CatalogUiState.Loading
+        when (val res = mediaRepository.fetchSeriesCatalog(source, forceRefresh)) {
+            is ApiResult.Success -> {
+                _seriesState.value = CatalogUiState.Success(
+                    SeriesCatalogData(res.data.categories, res.data.series),
+                    fromCache = res.fromCache
+                )
+                if (!res.fromCache) _isOfflineMode.value = false
+            }
+            is ApiResult.Failure -> {
+                _seriesState.value = CatalogUiState.Error(res.error)
+                _isOfflineMode.value = true
+                _offlineMessage.value = res.error.userMessage
             }
         }
     }
 
     private val inFlightEpgIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val attemptedEpgIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val epgSemaphore = Semaphore(3)
 
-    fun fetchChannelEpg(channel: XtreamLiveChannel) {
+    fun fetchChannelEpg(channel: XtreamLiveChannel, force: Boolean = false) {
         val src = activeSource.value ?: return
+        if (!force && attemptedEpgIds.contains(channel.streamId)) return
         if (!inFlightEpgIds.add(channel.streamId)) return
         viewModelScope.launch {
             try {
-                when (val res = mediaRepository.fetchShortEpg(src, channel.streamId)) {
-                    is ApiResult.Success -> {
-                        _channelEpgMap.update { it + (channel.streamId to res.data) }
+                epgSemaphore.withPermit {
+                    attemptedEpgIds.add(channel.streamId)
+                    when (val res = mediaRepository.fetchShortEpg(src, channel.streamId)) {
+                        is ApiResult.Success -> {
+                            _channelEpgMap.update { current ->
+                                if (current.size > 350) {
+                                    // Keep map bounded so memory stays lean across long sessions
+                                    val trimmed = current.entries.drop(100).associate { it.key to it.value }
+                                    trimmed + (channel.streamId to res.data)
+                                } else {
+                                    current + (channel.streamId to res.data)
+                                }
+                            }
+                        }
+                        is ApiResult.Failure -> Unit
                     }
-                    is ApiResult.Failure -> Unit
                 }
             } finally {
                 inFlightEpgIds.remove(channel.streamId)
@@ -562,6 +580,7 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
 
     fun switchActiveSource(sourceId: String) {
         _channelEpgMap.value = emptyMap()
+        attemptedEpgIds.clear()
         sourceRepository.setActiveSource(sourceId)
     }
 

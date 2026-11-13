@@ -199,8 +199,8 @@ fun FullScreenPlayerScreen(
     DisposableEffect(Unit) {
         onDispose {
             controller.syncPosition()
-            val pos = controller.exoPlayer.currentPosition.coerceAtLeast(0L)
-            val dur = controller.exoPlayer.duration.coerceAtLeast(0L)
+            val pos = controller.state.value.positionMs
+            val dur = controller.state.value.durationMs
             if (target !is PlaybackTarget.Live && pos > 0L) {
                 onSaveProgress(target, pos, dur)
             }
@@ -242,6 +242,9 @@ fun FullScreenPlayerScreen(
                 }
             },
             update = { view ->
+                if (view.player !== controller.exoPlayer) {
+                    view.player = controller.exoPlayer
+                }
                 view.subtitleView?.let { subView ->
                     subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, settings.subtitleFontSizeSp)
                     val bgAlphaInt = (settings.subtitleBgOpacity * 255).toInt().coerceIn(0, 255)
@@ -257,6 +260,9 @@ fun FullScreenPlayerScreen(
                         )
                     )
                 }
+            },
+            onRelease = { view ->
+                view.player = null
             },
             modifier = Modifier.fillMaxSize()
         )

@@ -1,6 +1,8 @@
 package com.example.data.remote
 
 import android.util.Base64
+import android.util.JsonReader
+import android.util.JsonToken
 import com.example.core.security.XtreamSourceProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,7 +15,9 @@ import kotlinx.serialization.json.contentOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.BufferedReader
 import java.io.IOException
+import java.io.InputStreamReader
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.text.SimpleDateFormat
@@ -119,23 +123,26 @@ class XtreamApiService {
     ): ApiResult<List<XtreamCategory>> = withContext(Dispatchers.IO) {
         val url = buildActionUrl(source, action)
             ?: return@withContext ApiResult.Failure(XtreamApiError.InvalidUrl)
-        when (val res = executeJsonRequest(url)) {
-            is ApiResult.Failure -> res
-            is ApiResult.Success -> {
-                val array = res.data as? JsonArray ?: JsonArray(emptyList())
-                val items = array.mapNotNull { elem ->
-                    val obj = elem as? JsonObject ?: return@mapNotNull null
-                    val id = obj.str("category_id")
-                    val name = obj.str("category_name")
-                    if (id.isBlank() && name.isBlank()) null
-                    else XtreamCategory(
-                        categoryId = id,
-                        categoryName = name.ifBlank { "Uncategorized" },
-                        parentId = obj.int("parent_id")
-                    )
+        executeStreamingJsonArray(url) { reader ->
+            var id = ""
+            var name = ""
+            var parentId = 0
+            reader.beginObject()
+            while (reader.hasNext()) {
+                when (reader.nextName()) {
+                    "category_id" -> id = reader.nextScalarAsString()
+                    "category_name" -> name = reader.nextScalarAsString()
+                    "parent_id" -> parentId = reader.nextScalarAsString().toIntOrNull() ?: 0
+                    else -> reader.skipValue()
                 }
-                ApiResult.Success(items)
             }
+            reader.endObject()
+            if (id.isBlank() && name.isBlank()) null
+            else XtreamCategory(
+                categoryId = id,
+                categoryName = name.ifBlank { "Uncategorized" },
+                parentId = parentId
+            )
         }
     }
 
@@ -143,27 +150,46 @@ class XtreamApiService {
         withContext(Dispatchers.IO) {
             val url = buildActionUrl(source, "get_live_streams")
                 ?: return@withContext ApiResult.Failure(XtreamApiError.InvalidUrl)
-            when (val res = executeJsonRequest(url)) {
-                is ApiResult.Failure -> res
-                is ApiResult.Success -> {
-                    val array = res.data as? JsonArray ?: JsonArray(emptyList())
-                    val channels = array.mapNotNull { elem ->
-                        val obj = elem as? JsonObject ?: return@mapNotNull null
-                        val streamId = obj.str("stream_id")
-                        if (streamId.isBlank()) return@mapNotNull null
-                        XtreamLiveChannel(
-                            streamId = streamId,
-                            num = obj.int("num"),
-                            name = obj.str("name").ifBlank { "Channel $streamId" },
-                            streamIcon = obj.str("stream_icon"),
-                            epgChannelId = obj.str("epg_channel_id"),
-                            categoryId = obj.str("category_id"),
-                            tvArchive = obj.int("tv_archive") == 1,
-                            tvArchiveDurationDays = obj.int("tv_archive_duration")
-                        )
+            executeStreamingJsonArray(url) { reader ->
+                var streamId = ""
+                var num = 0
+                var name = ""
+                var streamIcon = ""
+                var epgChannelId = ""
+                var categoryId = ""
+                var tvArchive = false
+                var tvArchiveDuration = 0
+
+                reader.beginObject()
+                while (reader.hasNext()) {
+                    when (reader.nextName()) {
+                        "stream_id" -> streamId = reader.nextScalarAsString()
+                        "num" -> num = reader.nextScalarAsString().toIntOrNull() ?: 0
+                        "name" -> name = reader.nextScalarAsString()
+                        "stream_icon" -> streamIcon = reader.nextUrlAsString()
+                        "epg_channel_id" -> epgChannelId = reader.nextScalarAsString()
+                        "category_id" -> categoryId = reader.nextScalarAsString()
+                        "tv_archive" -> {
+                            val v = reader.nextScalarAsString()
+                            tvArchive = v == "1" || v.equals("true", ignoreCase = true)
+                        }
+                        "tv_archive_duration" -> tvArchiveDuration = reader.nextScalarAsString().toIntOrNull() ?: 0
+                        else -> reader.skipValue()
                     }
-                    ApiResult.Success(channels)
                 }
+                reader.endObject()
+
+                if (streamId.isBlank()) null
+                else XtreamLiveChannel(
+                    streamId = streamId,
+                    num = num,
+                    name = name.ifBlank { "Channel $streamId" },
+                    streamIcon = streamIcon,
+                    epgChannelId = epgChannelId,
+                    categoryId = categoryId,
+                    tvArchive = tvArchive,
+                    tvArchiveDurationDays = tvArchiveDuration
+                )
             }
         }
 
@@ -220,30 +246,50 @@ class XtreamApiService {
         withContext(Dispatchers.IO) {
             val url = buildActionUrl(source, "get_vod_streams")
                 ?: return@withContext ApiResult.Failure(XtreamApiError.InvalidUrl)
-            when (val res = executeJsonRequest(url)) {
-                is ApiResult.Failure -> res
-                is ApiResult.Success -> {
-                    val array = res.data as? JsonArray ?: JsonArray(emptyList())
-                    val movies = array.mapNotNull { elem ->
-                        val obj = elem as? JsonObject ?: return@mapNotNull null
-                        val streamId = obj.str("stream_id")
-                        if (streamId.isBlank()) return@mapNotNull null
-                        val rawName = obj.str("name").ifBlank { "Untitled Movie" }
-                        val parsedYear = obj.str("year")
-                            .ifBlank { extractYearFromText(rawName) }
-                        XtreamMovie(
-                            streamId = streamId,
-                            num = obj.int("num"),
-                            name = rawName,
-                            streamIcon = obj.str("stream_icon"),
-                            rating = parseRating(obj.str("rating_5based"), obj.str("rating")),
-                            year = parsedYear,
-                            addedTimestamp = obj.long("added"),
-                            categoryId = obj.str("category_id"),
-                            containerExtension = obj.str("container_extension").ifBlank { "mp4" }
-                        )
+            executeStreamingJsonArray(url) { reader ->
+                var streamId = ""
+                var num = 0
+                var rawName = ""
+                var streamIcon = ""
+                var fiveBased = ""
+                var rawRating = ""
+                var year = ""
+                var added = 0L
+                var categoryId = ""
+                var containerExt = ""
+
+                reader.beginObject()
+                while (reader.hasNext()) {
+                    when (reader.nextName()) {
+                        "stream_id" -> streamId = reader.nextScalarAsString()
+                        "num" -> num = reader.nextScalarAsString().toIntOrNull() ?: 0
+                        "name" -> rawName = reader.nextScalarAsString()
+                        "stream_icon" -> streamIcon = reader.nextUrlAsString()
+                        "rating_5based" -> fiveBased = reader.nextScalarAsString()
+                        "rating" -> rawRating = reader.nextScalarAsString()
+                        "year" -> year = reader.nextScalarAsString()
+                        "added" -> added = reader.nextScalarAsString().toLongOrNull() ?: 0L
+                        "category_id" -> categoryId = reader.nextScalarAsString()
+                        "container_extension" -> containerExt = reader.nextScalarAsString()
+                        else -> reader.skipValue()
                     }
-                    ApiResult.Success(movies)
+                }
+                reader.endObject()
+
+                if (streamId.isBlank()) null
+                else {
+                    val safeName = rawName.ifBlank { "Untitled Movie" }
+                    XtreamMovie(
+                        streamId = streamId,
+                        num = num,
+                        name = safeName,
+                        streamIcon = streamIcon,
+                        rating = parseRating(fiveBased, rawRating),
+                        year = year.ifBlank { extractYearFromText(safeName) },
+                        addedTimestamp = added,
+                        categoryId = categoryId,
+                        containerExtension = containerExt.ifBlank { "mp4" }
+                    )
                 }
             }
         }
@@ -313,34 +359,63 @@ class XtreamApiService {
         withContext(Dispatchers.IO) {
             val url = buildActionUrl(source, "get_series")
                 ?: return@withContext ApiResult.Failure(XtreamApiError.InvalidUrl)
-            when (val res = executeJsonRequest(url)) {
-                is ApiResult.Failure -> res
-                is ApiResult.Success -> {
-                    val array = res.data as? JsonArray ?: JsonArray(emptyList())
-                    val list = array.mapNotNull { elem ->
-                        val obj = elem as? JsonObject ?: return@mapNotNull null
-                        val seriesId = obj.str("series_id")
-                        if (seriesId.isBlank()) return@mapNotNull null
-                        val release = obj.str("releaseDate")
-                        val name = obj.str("name").ifBlank { "Untitled Series" }
-                        XtreamSeries(
-                            seriesId = seriesId,
-                            num = obj.int("num"),
-                            name = name,
-                            coverUrl = obj.str("cover"),
-                            backdropUrl = extractBackdrop(obj["backdrop_path"]).ifBlank { obj.str("cover") },
-                            plot = obj.str("plot"),
-                            cast = obj.str("cast"),
-                            director = obj.str("director"),
-                            genre = obj.str("genre"),
-                            releaseDate = release,
-                            year = release.take(4).ifBlank { extractYearFromText(name) },
-                            lastModified = obj.long("last_modified"),
-                            rating = parseRating(obj.str("rating_5based"), obj.str("rating")),
-                            categoryId = obj.str("category_id")
-                        )
+            executeStreamingJsonArray(url) { reader ->
+                var seriesId = ""
+                var num = 0
+                var rawName = ""
+                var cover = ""
+                var backdrop = ""
+                var plot = ""
+                var cast = ""
+                var director = ""
+                var genre = ""
+                var release = ""
+                var lastModified = 0L
+                var fiveBased = ""
+                var rawRating = ""
+                var categoryId = ""
+
+                reader.beginObject()
+                while (reader.hasNext()) {
+                    when (reader.nextName()) {
+                        "series_id" -> seriesId = reader.nextScalarAsString()
+                        "num" -> num = reader.nextScalarAsString().toIntOrNull() ?: 0
+                        "name" -> rawName = reader.nextScalarAsString()
+                        "cover" -> cover = reader.nextUrlAsString()
+                        "backdrop_path" -> backdrop = reader.nextFirstBackdropUrl()
+                        "plot" -> plot = reader.nextScalarAsString()
+                        "cast" -> cast = reader.nextScalarAsString()
+                        "director" -> director = reader.nextScalarAsString()
+                        "genre" -> genre = reader.nextScalarAsString()
+                        "releaseDate" -> release = reader.nextScalarAsString()
+                        "last_modified" -> lastModified = reader.nextScalarAsString().toLongOrNull() ?: 0L
+                        "rating_5based" -> fiveBased = reader.nextScalarAsString()
+                        "rating" -> rawRating = reader.nextScalarAsString()
+                        "category_id" -> categoryId = reader.nextScalarAsString()
+                        else -> reader.skipValue()
                     }
-                    ApiResult.Success(list)
+                }
+                reader.endObject()
+
+                if (seriesId.isBlank()) null
+                else {
+                    val safeName = rawName.ifBlank { "Untitled Series" }
+                    XtreamSeries(
+                        seriesId = seriesId,
+                        num = num,
+                        name = safeName,
+                        coverUrl = cover,
+                        backdropUrl = backdrop.ifBlank { cover },
+                        plot = plot,
+                        cast = cast,
+                        director = director,
+                        genre = genre,
+                        releaseDate = release,
+                        year = release.take(4).ifBlank { extractYearFromText(safeName) },
+                        lastModified = lastModified,
+                        rating = parseRating(fiveBased, rawRating),
+                        categoryId = categoryId
+                    )
                 }
             }
         }
@@ -474,10 +549,111 @@ class XtreamApiService {
             .toString()
     }
 
+    private inline fun <T> executeStreamingJsonArray(
+        url: String,
+        crossinline readItem: (JsonReader) -> T?
+    ): ApiResult<List<T>> {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "NextVuPlayer/1.1 (Android)")
+            .get()
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                when (response.code) {
+                    429 -> ApiResult.Failure(XtreamApiError.RateLimited)
+                    401, 403 -> ApiResult.Failure(XtreamApiError.Unauthorized)
+                    in 200..299 -> {
+                        val bodyStream = response.body?.byteStream()
+                            ?: return ApiResult.Failure(XtreamApiError.ServerError(response.code, "Empty response"))
+                        val reader = JsonReader(BufferedReader(InputStreamReader(bodyStream, Charsets.UTF_8), 32 * 1024))
+                        reader.isLenient = true
+                        reader.use {
+                            when (it.peek()) {
+                                JsonToken.BEGIN_ARRAY -> {
+                                    val result = ArrayList<T>()
+                                    it.beginArray()
+                                    while (it.hasNext()) {
+                                        if (it.peek() == JsonToken.BEGIN_OBJECT) {
+                                            readItem(it)?.let { item -> result.add(item) }
+                                        } else {
+                                            it.skipValue()
+                                        }
+                                    }
+                                    it.endArray()
+                                    ApiResult.Success(result)
+                                }
+                                else -> ApiResult.Success(emptyList())
+                            }
+                        }
+                    }
+                    else -> ApiResult.Failure(
+                        XtreamApiError.ServerError(response.code, response.message.ifBlank { "HTTP Error" })
+                    )
+                }
+            }
+        } catch (_: SocketTimeoutException) {
+            ApiResult.Failure(XtreamApiError.Timeout)
+        } catch (_: UnknownHostException) {
+            ApiResult.Failure(XtreamApiError.NetworkOffline)
+        } catch (_: IOException) {
+            ApiResult.Failure(XtreamApiError.NetworkOffline)
+        } catch (e: Exception) {
+            ApiResult.Failure(XtreamApiError.ServerError(-1, e.localizedMessage ?: "Unexpected error"))
+        }
+    }
+
+    private fun JsonReader.nextScalarAsString(): String {
+        return when (peek()) {
+            JsonToken.STRING, JsonToken.NUMBER -> nextString().trim()
+            JsonToken.BOOLEAN -> if (nextBoolean()) "true" else "false"
+            JsonToken.NULL -> {
+                nextNull()
+                ""
+            }
+            else -> {
+                skipValue()
+                ""
+            }
+        }
+    }
+
+    private fun JsonReader.nextUrlAsString(): String {
+        val raw = nextScalarAsString()
+        if (raw.isBlank() || raw.equals("null", ignoreCase = true)) return ""
+        return if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) {
+            raw
+        } else ""
+    }
+
+    private fun JsonReader.nextFirstBackdropUrl(): String {
+        return when (peek()) {
+            JsonToken.STRING -> nextUrlAsString()
+            JsonToken.BEGIN_ARRAY -> {
+                var first = ""
+                beginArray()
+                while (hasNext()) {
+                    if (first.isBlank()) {
+                        first = nextUrlAsString()
+                    } else {
+                        skipValue()
+                    }
+                }
+                endArray()
+                first
+            }
+            else -> {
+                skipValue()
+                ""
+            }
+        }
+    }
+
     private fun executeJsonRequest(url: String): ApiResult<JsonElement> {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "NextVuPlayer/1.0 (Android)")
+            .header("User-Agent", "NextVuPlayer/1.1 (Android)")
             .get()
             .build()
 
