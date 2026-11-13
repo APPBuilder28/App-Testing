@@ -603,8 +603,8 @@ fun FullScreenPlayerScreen(
                         text = titleText,
                         style = MaterialTheme.typography.titleLarge,
                         color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = true,
+                        modifier = Modifier.weight(1f)
                     )
                 }
 

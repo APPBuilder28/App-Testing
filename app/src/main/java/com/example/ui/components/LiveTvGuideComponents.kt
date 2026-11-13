@@ -14,10 +14,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -195,7 +197,7 @@ data class LiveTvUiMetrics(
                 playlistIconSize = lerp(12.dp, 16.dp, t),
                 timelineHeaderHeight = lerp(24.dp, 40.dp, t),
                 timelineHeaderSp = lerpSp(9.5.sp, 13.sp, t),
-                channelColWidth = if (isCompact) lerp(96.dp, 148.dp, t) else lerp(140.dp, 220.dp, t),
+                channelColWidth = if (isCompact) lerp(148.dp, 212.dp, t) else lerp(180.dp, 268.dp, t),
                 guideRowHeight = lerp(34.dp, 62.dp, t),
                 guideLogoSize = lerp(20.dp, 36.dp, t),
                 guideChannelSp = lerpSp(10.5.sp, 14.5.sp, t),
@@ -618,10 +620,10 @@ fun LiveHeroHeaderSection(
                     Text(
                         text = channelTitle,
                         fontSize = metrics.heroTitleSp,
+                        lineHeight = (metrics.heroTitleSp.value * 1.2f).sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = true
                     )
                 }
 
@@ -1197,7 +1199,8 @@ fun LiveEpgGuideChannelRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(metrics.guideRowHeight),
+                .height(IntrinsicSize.Min)
+                .defaultMinSize(minHeight = metrics.guideRowHeight),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left Pinned Channel Info Column (ONLY the channel is clickable, not the TV guide)
@@ -1262,11 +1265,13 @@ fun LiveEpgGuideChannelRow(
                 Text(
                     text = channel.name,
                     fontSize = metrics.guideChannelSp,
+                    lineHeight = (metrics.guideChannelSp.value * 1.2f).sp,
                     fontWeight = if (isPreviewing) FontWeight.Bold else FontWeight.Medium,
                     color = if (isPreviewing) ElectricCyan else TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    softWrap = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 4.dp)
                 )
 
                 IconButton(
