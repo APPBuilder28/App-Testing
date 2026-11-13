@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -51,3 +54,22 @@ jobs:
           name: NextVu-Player-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Publish GitHub Release APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION_NAME=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+          VERSION_CODE=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]//g')
+          VERSION_NAME=${VERSION_NAME:-1.0}
+          VERSION_CODE=${VERSION_CODE:-1}
+          TAG="v${VERSION_NAME}"
+          APK_FILE="NextVu-Player-${TAG}-b${VERSION_CODE}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK_FILE"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_FILE" --clobber
+          else
+            gh release create "$TAG" "$APK_FILE" \
+              --title "NextVu Player ${TAG} (Build ${VERSION_CODE})" \
+              --notes "Synced build from commit ${GITHUB_SHA::7}."
+          fi
