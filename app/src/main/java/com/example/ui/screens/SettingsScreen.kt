@@ -80,7 +80,13 @@ import com.example.ui.components.ImportCredentialsWarningDialog
 import com.example.ui.components.ImportProgressDialog
 import com.example.ui.components.ImportSourcesPreviewDialog
 import com.example.ui.components.LegalDisclaimerBanner
+import com.example.ui.components.NextVuButton
+import com.example.ui.components.NextVuFilterChip
+import com.example.ui.components.NextVuTextButton
 import com.example.ui.components.NextVuTopBar
+import com.example.ui.components.rememberHoverFocusState
+import com.example.ui.components.thickBlackHoverOutline
+import com.example.ui.components.trackHoverFocus
 import com.example.ui.theme.BgCharcoal
 import com.example.ui.theme.DeepViolet
 import com.example.ui.theme.ElectricCyan
@@ -175,7 +181,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         VideoQualityPreset.entries.forEach { preset ->
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = settings.videoQuality == preset,
                                 onClick = { onSelectVideoQuality(preset) },
                                 label = { Text(preset.label, maxLines = 1) },
@@ -251,7 +257,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SubtitleColorOption.entries.forEach { opt ->
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = settings.subtitleColor == opt,
                                 onClick = { onSetSubtitleColor(opt) },
                                 label = { Text(opt.label) },
@@ -338,7 +344,7 @@ fun SettingsScreen(
                 SettingsCard(icon = Icons.Rounded.Language, title = strings.languageLabel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AppLanguage.entries.forEach { lang ->
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = settings.language == lang,
                                 onClick = { onSetLanguage(lang) },
                                 label = { Text(lang.displayName) },
@@ -427,7 +433,7 @@ fun SettingsScreen(
                         color = TextSecondary
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    TextButton(
+                    NextVuTextButton(
                         onClick = { showAboutDialog = true },
                         modifier = Modifier.testTag("settings_about_dialog_btn")
                     ) {
@@ -480,7 +486,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = {
                         if (pinInput.length != 4) {
                             pinError = "Enter a 4-digit PIN."
@@ -501,7 +507,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPinDialog = false }) {
+                NextVuTextButton(onClick = { showPinDialog = false }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -521,7 +527,7 @@ fun SettingsScreen(
             },
             confirmButton = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
+                    NextVuButton(
                         onClick = {
                             onClearActiveSourceHistory()
                             showClearHistoryDialog = false
@@ -532,7 +538,7 @@ fun SettingsScreen(
                     ) {
                         Text(strings.clearCurrentSource)
                     }
-                    Button(
+                    NextVuButton(
                         onClick = {
                             onClearAllSourcesHistory()
                             showClearHistoryDialog = false
@@ -545,7 +551,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearHistoryDialog = false }) {
+                NextVuTextButton(onClick = { showClearHistoryDialog = false }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -564,7 +570,7 @@ fun SettingsScreen(
                 )
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = {
                         onResetAllSources()
                         showResetSourcesDialog = false
@@ -576,7 +582,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetSourcesDialog = false }) {
+                NextVuTextButton(onClick = { showResetSourcesDialog = false }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -600,7 +606,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = { showAboutDialog = false },
                     colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = BgCharcoal)
                 ) {
@@ -679,19 +685,23 @@ private fun SettingsActionButton(
     modifier: Modifier = Modifier,
     labelColor: Color = TextPrimary
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val hoverState = rememberHoverFocusState()
+    val highlighted = hoverState.isHighlighted
+    val btnShape = RoundedCornerShape(999.dp)
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(999.dp),
-        color = if (isFocused) ElectricCyan.copy(alpha = 0.18f) else Color.Transparent,
-        border = BorderStroke(
-            width = if (isFocused) 2.5.dp else 1.dp,
-            color = if (isFocused) ElectricCyan else borderColor
-        ),
+        shape = btnShape,
+        color = if (highlighted) SurfaceCardVariant else Color.Transparent,
+        border = if (highlighted) null else BorderStroke(1.dp, borderColor),
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { isFocused = it.isFocused }
+            .trackHoverFocus(hoverState)
+            .thickBlackHoverOutline(
+                highlighted = highlighted,
+                shape = btnShape,
+                contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+            )
             .minimumInteractiveComponentSize()
     ) {
         Row(
@@ -704,13 +714,13 @@ private fun SettingsActionButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFocused) ElectricCyan else tint
+                tint = if (highlighted) ElectricCyan else tint
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = label,
-                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (isFocused && labelColor == TextPrimary) Color.White else labelColor
+                fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (highlighted && labelColor == TextPrimary) Color.White else labelColor
             )
         }
     }

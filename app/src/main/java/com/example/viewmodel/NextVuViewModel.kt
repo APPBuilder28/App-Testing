@@ -174,6 +174,9 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
     private val _isRefreshingSeries = MutableStateFlow(false)
     val isRefreshingSeries: StateFlow<Boolean> = _isRefreshingSeries.asStateFlow()
 
+    private val _isReloadingPlaylists = MutableStateFlow(false)
+    val isReloadingPlaylists: StateFlow<Boolean> = _isReloadingPlaylists.asStateFlow()
+
     private val _testConnectionState = MutableStateFlow<TestConnectionUiState>(TestConnectionUiState.Idle)
     val testConnectionState: StateFlow<TestConnectionUiState> = _testConnectionState.asStateFlow()
 
@@ -243,6 +246,38 @@ class NextVuViewModel(application: Application) : AndroidViewModel(application) 
             _isRefreshingSeries.value = true
             loadSeriesCatalog(src, forceRefresh = true)
             _isRefreshingSeries.value = false
+        }
+    }
+
+    fun reloadActiveSourcePlaylists(onComplete: (success: Boolean, message: String) -> Unit = { _, _ -> }) {
+        val src = activeSource.value
+        if (src == null) {
+            onComplete(false, "No active source selected.")
+            return
+        }
+        if (_isReloadingPlaylists.value) return
+        catalogLoadJob?.cancel()
+        attemptedEpgIds.clear()
+        _channelEpgMap.value = emptyMap()
+        catalogLoadJob = viewModelScope.launch {
+            _isReloadingPlaylists.value = true
+            try {
+                loadLiveCatalog(src, forceRefresh = true)
+                loadMoviesCatalog(src, forceRefresh = true)
+                loadSeriesCatalog(src, forceRefresh = true)
+                val anyError = _liveState.value is CatalogUiState.Error &&
+                    _moviesState.value is CatalogUiState.Error &&
+                    _seriesState.value is CatalogUiState.Error
+                if (anyError) {
+                    val errMsg = (_liveState.value as? CatalogUiState.Error)?.error?.userMessage
+                        ?: "Failed to reload playlists."
+                    onComplete(false, errMsg)
+                } else {
+                    onComplete(true, "Reloaded playlists & stream links for ${src.sourceName}")
+                }
+            } finally {
+                _isReloadingPlaylists.value = false
+            }
         }
     }
 

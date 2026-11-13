@@ -30,7 +30,6 @@ import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -62,6 +61,7 @@ import com.example.ui.components.ClickToEditSearchBar
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingStateView
+import com.example.ui.components.NextVuIconButton
 import com.example.ui.components.NextVuInteractiveCard
 import com.example.ui.components.NextVuTopBar
 import com.example.ui.components.PosterCard
@@ -438,7 +438,7 @@ private fun GlobalSearchDialog(
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = onDismiss) {
+                    NextVuIconButton(onClick = onDismiss) {
                         Icon(Icons.Rounded.Close, contentDescription = strings.cancel, tint = TextSecondary)
                     }
                 }

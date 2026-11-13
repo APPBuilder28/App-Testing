@@ -81,28 +81,29 @@ fun PlayerFocusIconButton(
     iconSize: Dp = 26.dp,
     isPrimary: Boolean = false
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val hoverState = rememberHoverFocusState()
+    val highlighted = hoverState.isHighlighted
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.12f else 1f,
+        targetValue = if (highlighted) 1.12f else 1f,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 460f),
         label = "icon_btn_focus_scale"
     )
     val containerColor by animateColorAsState(
         targetValue = when {
-            isPrimary && isFocused -> Color.White
+            isPrimary && highlighted -> Color.White
             isPrimary -> ElectricCyan
-            isFocused -> ElectricCyan.copy(alpha = 0.28f)
+            highlighted -> ElectricCyan.copy(alpha = 0.30f)
             else -> SurfaceCard.copy(alpha = 0.8f)
         },
         label = "icon_btn_bg"
     )
     val tintColor = when {
         isPrimary -> BgCharcoal
-        isFocused -> ElectricCyan
+        highlighted -> ElectricCyan
         else -> TextPrimary
     }
     val borderStroke = when {
-        isFocused -> BorderStroke(2.5.dp, if (isPrimary) ElectricCyan else Color.White)
+        highlighted -> null
         isPrimary -> BorderStroke(1.5.dp, Color.White.copy(alpha = 0.55f))
         else -> BorderStroke(1.dp, SurfaceBorderSubtle.copy(alpha = 0.7f))
     }
@@ -118,10 +119,14 @@ fun PlayerFocusIconButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (it.isFocused) onFocusReceived()
+            .trackHoverFocus(hoverState) { focused ->
+                if (focused) onFocusReceived()
             }
+            .thickBlackHoverOutline(
+                highlighted = highlighted,
+                shape = CircleShape,
+                contrastHaloColor = ElectricCyan.copy(alpha = 0.92f)
+            )
             .minimumInteractiveComponentSize()
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -144,15 +149,17 @@ fun PlayerToolButton(
     modifier: Modifier = Modifier,
     isActive: Boolean = false
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val hoverState = rememberHoverFocusState()
+    val highlighted = hoverState.isHighlighted
+    val btnShape = RoundedCornerShape(10.dp)
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.08f else 1f,
+        targetValue = if (highlighted) 1.08f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 460f),
         label = "tool_btn_focus_scale"
     )
     val containerColor by animateColorAsState(
         targetValue = when {
-            isFocused -> ElectricCyan.copy(alpha = 0.26f)
+            highlighted -> ElectricCyan.copy(alpha = 0.28f)
             isActive -> ElectricCyan.copy(alpha = 0.16f)
             else -> SurfaceCard.copy(alpha = 0.82f)
         },
@@ -160,7 +167,6 @@ fun PlayerToolButton(
     )
     val borderColor by animateColorAsState(
         targetValue = when {
-            isFocused -> ElectricCyan
             isActive -> ElectricCyan.copy(alpha = 0.65f)
             else -> SurfaceBorderSubtle
         },
@@ -169,18 +175,22 @@ fun PlayerToolButton(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = btnShape,
         color = containerColor,
-        border = BorderStroke(if (isFocused) 2.dp else 1.dp, borderColor),
+        border = if (highlighted) null else BorderStroke(1.dp, borderColor),
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (it.isFocused) onFocusReceived()
+            .trackHoverFocus(hoverState) { focused ->
+                if (focused) onFocusReceived()
             }
+            .thickBlackHoverOutline(
+                highlighted = highlighted,
+                shape = btnShape,
+                contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+            )
             .minimumInteractiveComponentSize()
     ) {
         Row(
@@ -190,15 +200,15 @@ fun PlayerToolButton(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isFocused) Color.White else ElectricCyan,
+                tint = if (highlighted) Color.White else ElectricCyan,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Medium,
-                color = if (isFocused) Color.White else TextPrimary
+                fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Medium,
+                color = if (highlighted) Color.White else TextPrimary
             )
         }
     }
@@ -211,27 +221,33 @@ fun PlayerNextEpisodeChip(
     onFocusReceived: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val hoverState = rememberHoverFocusState()
+    val highlighted = hoverState.isHighlighted
+    val chipShape = RoundedCornerShape(10.dp)
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.07f else 1f,
+        targetValue = if (highlighted) 1.07f else 1f,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 460f),
         label = "next_ep_focus_scale"
     )
 
     Surface(
         onClick = onToggle,
-        shape = RoundedCornerShape(10.dp),
-        color = if (isFocused) ElectricCyan.copy(alpha = 0.24f) else SurfaceCard.copy(alpha = 0.82f),
-        border = BorderStroke(if (isFocused) 2.dp else 1.dp, if (isFocused) ElectricCyan else SurfaceBorderSubtle),
+        shape = chipShape,
+        color = if (highlighted) ElectricCyan.copy(alpha = 0.28f) else SurfaceCard.copy(alpha = 0.82f),
+        border = if (highlighted) null else BorderStroke(1.dp, SurfaceBorderSubtle),
         modifier = modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .onFocusChanged {
-                isFocused = it.isFocused
-                if (it.isFocused) onFocusReceived()
+            .trackHoverFocus(hoverState) { focused ->
+                if (focused) onFocusReceived()
             }
+            .thickBlackHoverOutline(
+                highlighted = highlighted,
+                shape = chipShape,
+                contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+            )
             .minimumInteractiveComponentSize()
     ) {
         Row(
@@ -241,7 +257,7 @@ fun PlayerNextEpisodeChip(
             Text(
                 text = "Next Ep",
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Medium,
+                fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Medium,
                 color = TextPrimary
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -496,17 +512,14 @@ fun PlayerStreamErrorOverlay(
             )
             Spacer(modifier = Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                var retryFocused by remember { mutableStateOf(false) }
-                Button(
+                NextVuButton(
                     onClick = onRetry,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (retryFocused) Color.White else ElectricCyan,
+                        containerColor = ElectricCyan,
                         contentColor = BgCharcoal
                     ),
-                    border = if (retryFocused) BorderStroke(2.dp, ElectricCyan) else null,
                     modifier = Modifier
                         .focusRequester(retryFocusRequester)
-                        .onFocusChanged { retryFocused = it.isFocused }
                         .minimumInteractiveComponentSize()
                 ) {
                     Icon(Icons.Rounded.Refresh, contentDescription = null)
@@ -515,27 +528,21 @@ fun PlayerStreamErrorOverlay(
                 }
 
                 if (showTsFallback) {
-                    var tsFocused by remember { mutableStateOf(false) }
-                    OutlinedButton(
+                    NextVuOutlinedButton(
                         onClick = onRetryTs,
-                        border = BorderStroke(if (tsFocused) 2.dp else 1.dp, if (tsFocused) ElectricCyan else SurfaceBorderSubtle),
-                        modifier = Modifier
-                            .onFocusChanged { tsFocused = it.isFocused }
-                            .minimumInteractiveComponentSize()
+                        border = BorderStroke(1.dp, SurfaceBorderSubtle),
+                        modifier = Modifier.minimumInteractiveComponentSize()
                     ) {
-                        Text("Try .TS Fallback", color = if (tsFocused) ElectricCyan else TextPrimary)
+                        Text("Try .TS Fallback", color = TextPrimary)
                     }
                 }
 
-                var backFocused by remember { mutableStateOf(false) }
-                OutlinedButton(
+                NextVuOutlinedButton(
                     onClick = onBack,
-                    border = BorderStroke(if (backFocused) 2.dp else 1.dp, if (backFocused) ElectricCyan else SurfaceBorderSubtle),
-                    modifier = Modifier
-                        .onFocusChanged { backFocused = it.isFocused }
-                        .minimumInteractiveComponentSize()
+                    border = BorderStroke(1.dp, SurfaceBorderSubtle),
+                    modifier = Modifier.minimumInteractiveComponentSize()
                 ) {
-                    Text("Back", color = if (backFocused) ElectricCyan else TextSecondary)
+                    Text("Back", color = TextSecondary)
                 }
             }
         }

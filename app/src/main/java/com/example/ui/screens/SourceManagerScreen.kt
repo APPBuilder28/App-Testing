@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -68,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -81,7 +83,12 @@ import com.example.core.i18n.LocalAppStrings
 import com.example.core.security.XtreamSourceProfile
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.LegalDisclaimerBanner
+import com.example.ui.components.NextVuButton
+import com.example.ui.components.NextVuFloatingActionButton
+import com.example.ui.components.NextVuIconButton
 import com.example.ui.components.NextVuInteractiveCard
+import com.example.ui.components.NextVuOutlinedButton
+import com.example.ui.components.NextVuTextButton
 import com.example.ui.components.NextVuTopBar
 import com.example.ui.theme.BgCharcoal
 import com.example.ui.theme.DeepViolet
@@ -102,9 +109,11 @@ fun SourceManagerScreen(
     sources: List<XtreamSourceProfile>,
     activeSource: XtreamSourceProfile?,
     isOfflineMode: Boolean,
+    isReloadingPlaylists: Boolean,
     testConnectionState: TestConnectionUiState,
     openAddDialogInitially: Boolean = false,
     onOpenQuickSwitch: () -> Unit,
+    onReloadPlaylists: () -> Unit,
     onTestConnection: (serverUrl: String, username: String, password: String) -> Unit,
     onResetTestState: () -> Unit,
     onSaveSource: (
@@ -141,6 +150,74 @@ fun SourceManagerScreen(
                 isOfflineMode = isOfflineMode,
                 onActiveSourceClick = onOpenQuickSwitch
             )
+
+            if (activeSource != null) {
+                Surface(
+                    color = SurfaceCard,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, SurfaceBorderSubtle),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Active: ${activeSource.sourceName}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Refresh live channels, movies, series & stream links",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        NextVuButton(
+                            onClick = onReloadPlaylists,
+                            enabled = !isReloadingPlaylists,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ElectricCyan,
+                                contentColor = BgCharcoal,
+                                disabledContainerColor = SurfaceCardVariant,
+                                disabledContentColor = TextMuted
+                            ),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("reload_playlists_button")
+                        ) {
+                            if (isReloadingPlaylists) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = ElectricCyan
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Reloading...", fontWeight = FontWeight.SemiBold)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = "Reload Playlist",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Reload Playlist", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
 
             Box(
                 modifier = Modifier
@@ -182,7 +259,7 @@ fun SourceManagerScreen(
                     }
                 }
 
-                FloatingActionButton(
+                NextVuFloatingActionButton(
                     onClick = {
                         editingSource = null
                         onResetTestState()
@@ -221,7 +298,7 @@ fun SourceManagerScreen(
                 )
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = {
                         onSwitchSource(target.id)
                         confirmSwitchTarget = null
@@ -233,7 +310,7 @@ fun SourceManagerScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmSwitchTarget = null }) {
+                NextVuTextButton(onClick = { confirmSwitchTarget = null }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -248,7 +325,26 @@ fun SourceManagerScreen(
             title = { Text(target.sourceName, color = TextPrimary) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
+                    if (target.id == activeSource?.id) {
+                        NextVuOutlinedButton(
+                            onClick = {
+                                contextMenuTarget = null
+                                onReloadPlaylists()
+                            },
+                            enabled = !isReloadingPlaylists,
+                            border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.65f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .minimumInteractiveComponentSize()
+                                .testTag("action_reload_playlists")
+                        ) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = null, tint = ElectricCyan)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Reload Playlist & Links", color = ElectricCyan)
+                        }
+                    }
+
+                    NextVuOutlinedButton(
                         onClick = {
                             contextMenuTarget = null
                             renameTarget = target
@@ -263,7 +359,7 @@ fun SourceManagerScreen(
                         Text(strings.renameSource, color = TextPrimary)
                     }
 
-                    OutlinedButton(
+                    NextVuOutlinedButton(
                         onClick = {
                             contextMenuTarget = null
                             editingSource = target
@@ -280,7 +376,7 @@ fun SourceManagerScreen(
                         Text(strings.editCredentials, color = TextPrimary)
                     }
 
-                    OutlinedButton(
+                    NextVuOutlinedButton(
                         onClick = {
                             contextMenuTarget = null
                             deleteTarget = target
@@ -298,7 +394,7 @@ fun SourceManagerScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { contextMenuTarget = null }) {
+                NextVuTextButton(onClick = { contextMenuTarget = null }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -323,7 +419,7 @@ fun SourceManagerScreen(
                 )
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = {
                         onRenameSource(target.id, newName)
                         renameTarget = null
@@ -334,7 +430,7 @@ fun SourceManagerScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { renameTarget = null }) {
+                NextVuTextButton(onClick = { renameTarget = null }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -354,7 +450,7 @@ fun SourceManagerScreen(
                 )
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = {
                         onDeleteSource(target.id)
                         deleteTarget = null
@@ -365,7 +461,7 @@ fun SourceManagerScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) {
+                NextVuTextButton(onClick = { deleteTarget = null }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -488,11 +584,9 @@ private fun SourceProfileCard(
                 }
             }
 
-            IconButton(
+            NextVuIconButton(
                 onClick = onMenuClick,
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .testTag("source_menu_${source.id}")
+                modifier = Modifier.testTag("source_menu_${source.id}")
             ) {
                 Icon(
                     imageVector = Icons.Rounded.MoreVert,
@@ -596,7 +690,7 @@ private fun AddOrEditSourceDialog(
                     singleLine = true,
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
-                        IconButton(
+                        NextVuIconButton(
                             onClick = { showPassword = !showPassword },
                             modifier = Modifier.testTag("password_visibility_toggle")
                         ) {
@@ -711,7 +805,7 @@ private fun AddOrEditSourceDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(
+                    NextVuOutlinedButton(
                         onClick = { onTestConnection(serverUrl, username, password) },
                         enabled = fieldsFilled && !isTesting,
                         border = BorderStroke(1.dp, DeepViolet),
@@ -731,7 +825,7 @@ private fun AddOrEditSourceDialog(
                         }
                     }
 
-                    Button(
+                    NextVuButton(
                         onClick = {
                             onSave(
                                 sourceName.ifBlank { "My Xtream" },
@@ -757,7 +851,7 @@ private fun AddOrEditSourceDialog(
 
                 LegalDisclaimerBanner(text = strings.legalDisclaimerShort)
 
-                TextButton(
+                NextVuTextButton(
                     onClick = onDismiss,
                     modifier = Modifier.align(Alignment.End)
                 ) {

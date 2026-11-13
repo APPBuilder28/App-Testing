@@ -54,10 +54,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -264,16 +262,23 @@ fun NextVuTopBar(
                 }
 
                 // Tappable Active-Source Quick-Switch Trigger
+                val sourcePillHover = rememberHoverFocusState()
                 Surface(
                     onClick = onActiveSourceClick,
                     shape = RoundedCornerShape(999.dp),
-                    color = SurfaceCardVariant,
+                    color = if (sourcePillHover.isHighlighted) ElectricCyan.copy(alpha = 0.22f) else SurfaceCardVariant,
                     border = BorderStroke(
                         1.dp,
                         if (activeSource != null) ElectricCyan.copy(alpha = 0.45f) else SurfaceBorderSubtle
                     ),
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
+                        .trackHoverFocus(sourcePillHover)
+                        .thickBlackHoverOutline(
+                            highlighted = sourcePillHover.isHighlighted,
+                            shape = RoundedCornerShape(999.dp),
+                            contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                        )
                         .testTag("active_source_switch_pill")
                 ) {
                     Row(
@@ -305,13 +310,11 @@ fun NextVuTopBar(
                 }
 
                 if (onSearchClick != null) {
-                    IconButton(
+                    NextVuIconButton(
                         onClick = onSearchClick,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .clip(CircleShape)
-                            .background(SurfaceCardVariant)
-                            .testTag("top_bar_search_button")
+                        containerColor = SurfaceCardVariant,
+                        hoverContainerColor = ElectricCyan.copy(alpha = 0.25f),
+                        modifier = Modifier.testTag("top_bar_search_button")
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Search,
@@ -351,7 +354,7 @@ fun QuickSourceSwitchDialog(
                 )
             },
             confirmButton = {
-                Button(
+                NextVuButton(
                     onClick = {
                         onSelectSource(target)
                         pendingConfirmSource = null
@@ -364,7 +367,7 @@ fun QuickSourceSwitchDialog(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingConfirmSource = null }) {
+                NextVuTextButton(onClick = { pendingConfirmSource = null }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -450,7 +453,7 @@ fun QuickSourceSwitchDialog(
             }
         },
         confirmButton = {
-            Button(
+            NextVuButton(
                 onClick = {
                     onDismiss()
                     onManageSources()
@@ -462,7 +465,7 @@ fun QuickSourceSwitchDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            NextVuTextButton(onClick = onDismiss) {
                 Text(strings.cancel, color = TextSecondary)
             }
         }
@@ -683,7 +686,7 @@ fun EmptyStateView(
             )
             if (actionLabel != null && onAction != null) {
                 Spacer(modifier = Modifier.height(20.dp))
-                Button(
+                NextVuButton(
                     onClick = onAction,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ElectricCyan,
@@ -741,7 +744,7 @@ fun ErrorStateView(
             )
             Spacer(modifier = Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
+                NextVuButton(
                     onClick = onRetry,
                     colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = BgCharcoal),
                     modifier = Modifier
@@ -753,7 +756,7 @@ fun ErrorStateView(
                     Text(strings.retry)
                 }
                 if (secondaryActionLabel != null && onSecondaryAction != null) {
-                    OutlinedButton(
+                    NextVuOutlinedButton(
                         onClick = onSecondaryAction,
                         border = BorderStroke(1.dp, DeepVioletSoftOrMuted),
                         modifier = Modifier.minimumInteractiveComponentSize()

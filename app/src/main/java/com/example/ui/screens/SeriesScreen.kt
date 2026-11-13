@@ -37,20 +37,14 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -84,7 +78,10 @@ import com.example.ui.components.EditPlaylistsDialog
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingStateView
+import com.example.ui.components.NextVuFilterChip
+import com.example.ui.components.NextVuIconButton
 import com.example.ui.components.NextVuInteractiveCard
+import com.example.ui.components.NextVuOutlinedButton
 import com.example.ui.components.NextVuTopBar
 import com.example.ui.components.PosterCard
 import com.example.ui.theme.BgCharcoal
@@ -100,7 +97,6 @@ import com.example.viewmodel.CatalogUiState
 import com.example.viewmodel.MediaSortOption
 import com.example.viewmodel.SeriesCatalogData
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SeriesScreen(
     activeSource: XtreamSourceProfile?,
@@ -226,7 +222,7 @@ fun SeriesScreen(
 
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = favoritesOnly,
                                 onClick = { favoritesOnly = !favoritesOnly },
                                 label = { Text(strings.favoritesOnly) },
@@ -236,17 +232,13 @@ fun SeriesScreen(
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp)
                                     )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
-                                )
+                                }
                             )
                         }
 
                         item {
                             Box {
-                                FilterChip(
+                                NextVuFilterChip(
                                     selected = selectedYear != null,
                                     onClick = { showYearMenu = true },
                                     label = { Text(selectedYear ?: "Year: All") }
@@ -272,7 +264,7 @@ fun SeriesScreen(
 
                         item {
                             Box {
-                                FilterChip(
+                                NextVuFilterChip(
                                     selected = minRating > 0.0,
                                     onClick = { showRatingMenu = true },
                                     label = { Text(if (minRating > 0) "Rating ≥ ${minRating.toInt()}★" else "Rating: All") }
@@ -294,7 +286,7 @@ fun SeriesScreen(
 
                         item {
                             Box {
-                                FilterChip(
+                                NextVuFilterChip(
                                     selected = true,
                                     onClick = { showSortMenu = true },
                                     leadingIcon = { Icon(Icons.Rounded.Sort, contentDescription = null, modifier = Modifier.size(16.dp)) },
@@ -333,37 +325,29 @@ fun SeriesScreen(
                             )
                         }
                         item {
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = activeCategoryId == null,
                                 onClick = { selectedCategoryId = null },
-                                label = { Text(strings.allCategories) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
-                                )
+                                label = { Text(strings.allCategories) }
                             )
                         }
                         itemsIndexed(
                             categories,
                             key = { idx, cat -> "scat_${cat.categoryId}_$idx" }
                         ) { _, cat ->
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = activeCategoryId == cat.categoryId,
                                 onClick = { selectedCategoryId = cat.categoryId },
-                                label = { Text(cat.categoryName) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
-                                )
+                                label = { Text(cat.categoryName) }
                             )
                         }
                     }
                 }
 
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
                 ) {
                     if (filtered.isEmpty()) {
                         EmptyStateView(
@@ -501,14 +485,15 @@ fun SeriesDetailScreen(
                                         )
                                     )
                             )
-                            IconButton(
+                            NextVuIconButton(
                                 onClick = onBack,
+                                containerColor = BgCharcoal.copy(alpha = 0.72f),
+                                hoverContainerColor = ElectricCyan.copy(alpha = 0.28f),
+                                contentColor = TextPrimary,
+                                visualSize = 44.dp,
                                 modifier = Modifier
                                     .statusBarsPadding()
                                     .padding(12.dp)
-                                    .clip(CircleShape)
-                                    .background(BgCharcoal.copy(alpha = 0.72f))
-                                    .minimumInteractiveComponentSize()
                                     .testTag("series_detail_back")
                             ) {
                                 Icon(
@@ -559,7 +544,7 @@ fun SeriesDetailScreen(
                             ) {
                                 // Season Dropdown Selector
                                 Box {
-                                    OutlinedButton(
+                                    NextVuOutlinedButton(
                                         onClick = { seasonDropdownExpanded = true },
                                         border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.6f)),
                                         modifier = Modifier
@@ -588,7 +573,7 @@ fun SeriesDetailScreen(
                                     }
                                 }
 
-                                OutlinedButton(
+                                NextVuOutlinedButton(
                                     onClick = { onToggleWatchlist(series) },
                                     border = BorderStroke(1.dp, if (isWatchlisted) ElectricCyan else SurfaceBorderSubtle),
                                     modifier = Modifier

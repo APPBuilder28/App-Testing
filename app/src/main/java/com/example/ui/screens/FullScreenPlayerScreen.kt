@@ -129,7 +129,10 @@ fun FullScreenPlayerScreen(
 ) {
     val strings = LocalAppStrings.current
     val context = LocalContext.current
-    val controller = remember { NextVuPlayerController(context) }
+    val isVodTarget = target !is PlaybackTarget.Live || target.isCatchUp
+    val controller = remember(isVodTarget) {
+        NextVuPlayerController(context, preferVodSmoothBuffering = isVodTarget)
+    }
     val telemetry by controller.state.collectAsState()
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -189,14 +192,42 @@ fun FullScreenPlayerScreen(
         }
     }
 
-    // Periodic position sync & progress persistence
-    LaunchedEffect(target) {
-        while (true) {
+    // Gate high-frequency HUD telemetry emissions to when controls are visible
+    LaunchedEffect(controlsVisible, controller) {
+        controller.setHudUpdatesEnabled(controlsVisible)
+        if (controlsVisible) {
             controller.syncPosition()
-            if (target !is PlaybackTarget.Live && telemetry.durationMs > 0L) {
-                onSaveProgress(target, telemetry.positionMs, telemetry.durationMs)
+            while (true) {
+                delay(500L)
+                controller.syncPosition()
             }
-            delay(2000L)
+        }
+    }
+
+    // Periodic progress persistence every 15s (avoids 2s Room DB + Flow recomposition stutters)
+    LaunchedEffect(target, controller) {
+        var lastSavedPosMs = startPositionMs
+        while (true) {
+            delay(15_000L)
+            if (isVodTarget && controller.state.value.isPlaying) {
+                val pos = controller.currentPositionMs
+                val dur = controller.currentDurationMs
+                if (dur > 0L && kotlin.math.abs(pos - lastSavedPosMs) >= 2_000L) {
+                    lastSavedPosMs = pos
+                    onSaveProgress(target, pos, dur)
+                }
+            }
+        }
+    }
+
+    // Save immediately when playback is paused
+    LaunchedEffect(telemetry.isPlaying, target) {
+        if (isVodTarget && !telemetry.isPlaying) {
+            val pos = controller.currentPositionMs
+            val dur = controller.currentDurationMs
+            if (dur > 0L && pos > 0L) {
+                onSaveProgress(target, pos, dur)
+            }
         }
     }
 
@@ -242,12 +273,11 @@ fun FullScreenPlayerScreen(
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(controller) {
         onDispose {
-            controller.syncPosition()
-            val pos = controller.state.value.positionMs
-            val dur = controller.state.value.durationMs
-            if (target !is PlaybackTarget.Live && pos > 0L) {
+            val pos = controller.currentPositionMs
+            val dur = controller.currentDurationMs
+            if (isVodTarget && pos > 0L) {
                 onSaveProgress(target, pos, dur)
             }
             controller.release()
@@ -327,11 +357,13 @@ fun FullScreenPlayerScreen(
             enabled = telemetry.shouldKeepAwake
         )
 
-        // Media3 PlayerView Surface + Customized Subtitles
+        // Media3 PlayerView Surface + Customized Subtitles (styles applied only on change)
+        var lastSubSignature by remember { mutableStateOf<Triple<Float, Int, Float>?>(null) }
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     isFocusable = false
                     isFocusableInTouchMode = false
                     player = controller.exoPlayer
@@ -349,20 +381,28 @@ fun FullScreenPlayerScreen(
                 if (view.keepScreenOn != telemetry.shouldKeepAwake) {
                     view.keepScreenOn = telemetry.shouldKeepAwake
                 }
-                view.subtitleView?.let { subView ->
-                    subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, settings.subtitleFontSizeSp)
-                    val bgAlphaInt = (settings.subtitleBgOpacity * 255).toInt().coerceIn(0, 255)
-                    val bgColor = AndroidColor.argb(bgAlphaInt, 0, 0, 0)
-                    subView.setStyle(
-                        CaptionStyleCompat(
-                            settings.subtitleColor.argb,
-                            bgColor,
-                            AndroidColor.TRANSPARENT,
-                            CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                            AndroidColor.BLACK,
-                            null
+                val desiredSig = Triple(
+                    settings.subtitleFontSizeSp,
+                    settings.subtitleColor.argb,
+                    settings.subtitleBgOpacity
+                )
+                if (lastSubSignature != desiredSig) {
+                    lastSubSignature = desiredSig
+                    view.subtitleView?.let { subView ->
+                        subView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, settings.subtitleFontSizeSp)
+                        val bgAlphaInt = (settings.subtitleBgOpacity * 255).toInt().coerceIn(0, 255)
+                        val bgColor = AndroidColor.argb(bgAlphaInt, 0, 0, 0)
+                        subView.setStyle(
+                            CaptionStyleCompat(
+                                settings.subtitleColor.argb,
+                                bgColor,
+                                AndroidColor.TRANSPARENT,
+                                CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                                AndroidColor.BLACK,
+                                null
+                            )
                         )
-                    )
+                    }
                 }
             },
             onRelease = { view ->
@@ -423,91 +463,98 @@ fun FullScreenPlayerScreen(
             }
         }
 
-        // Top Telemetry Badges (HDR + Bitrate HUD + HEVC Fallback Warning)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        // Top Telemetry Badges (HDR/Dolby Vision + Resolution + Bitrate HUD + HEVC Warning) auto-hide with controls after 5s
+        AnimatedVisibility(
+            visible = controlsVisible && !isScreenLocked && telemetry.errorMessage == null,
+            enter = fadeIn(animationSpec = tween(160)),
+            exit = fadeOut(animationSpec = tween(220)),
+            modifier = Modifier.align(Alignment.TopEnd)
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (telemetry.hdrType != HdrBadgeType.NONE) {
-                    Surface(
-                        color = HdrGold.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, HdrGold),
-                        modifier = Modifier.testTag("player_hdr_badge")
-                    ) {
-                        Text(
-                            text = telemetry.hdrType.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = HdrGold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-
-                if (telemetry.videoHeight > 0) {
-                    Surface(
-                        color = BgCharcoal.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.45f))
-                    ) {
-                        Text(
-                            text = if (telemetry.is4kStream) "4K ${telemetry.videoHeight}p" else "${telemetry.videoHeight}p",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = ElectricCyan,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-
-                if (settings.showBitrateOverlay) {
-                    val mbps = telemetry.bitrateKbps / 1000.0
-                    val bitrateLabel = if (telemetry.bitrateKbps >= 1000L) {
-                        String.format("%.1f Mbps", mbps)
-                    } else {
-                        "${telemetry.bitrateKbps} kbps"
-                    }
-                    Surface(
-                        color = BgCharcoal.copy(alpha = 0.78f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, DeepViolet.copy(alpha = 0.6f)),
-                        modifier = Modifier.testTag("player_bitrate_overlay")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (telemetry.hdrType != HdrBadgeType.NONE) {
+                        Surface(
+                            color = HdrGold.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, HdrGold),
+                            modifier = Modifier.testTag("player_hdr_badge")
                         ) {
-                            Icon(Icons.Rounded.Speed, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(bitrateLabel, style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                            Text(
+                                text = telemetry.hdrType.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = HdrGold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    if (telemetry.videoHeight > 0) {
+                        Surface(
+                            color = BgCharcoal.copy(alpha = 0.72f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.45f)),
+                            modifier = Modifier.testTag("player_resolution_badge")
+                        ) {
+                            Text(
+                                text = if (telemetry.is4kStream) "4K ${telemetry.videoHeight}p" else "${telemetry.videoHeight}p",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = ElectricCyan,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    if (settings.showBitrateOverlay) {
+                        val mbps = telemetry.bitrateKbps / 1000.0
+                        val bitrateLabel = if (telemetry.bitrateKbps >= 1000L) {
+                            String.format("%.1f Mbps", mbps)
+                        } else {
+                            "${telemetry.bitrateKbps} kbps"
+                        }
+                        Surface(
+                            color = BgCharcoal.copy(alpha = 0.78f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, DeepViolet.copy(alpha = 0.6f)),
+                            modifier = Modifier.testTag("player_bitrate_overlay")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.Speed, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(bitrateLabel, style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                            }
                         }
                     }
                 }
-            }
 
-            if (telemetry.showHevcSoftwareFallbackWarning) {
-                Surface(
-                    color = WarningAmber.copy(alpha = 0.18f),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.7f)),
-                    modifier = Modifier.testTag("hevc_software_warning")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                if (telemetry.showHevcSoftwareFallbackWarning) {
+                    Surface(
+                        color = WarningAmber.copy(alpha = 0.18f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, WarningAmber.copy(alpha = 0.7f)),
+                        modifier = Modifier.testTag("hevc_software_warning")
                     ) {
-                        Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = strings.hevcFallbackWarning,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = WarningAmber
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.WarningAmber, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = strings.hevcFallbackWarning,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = WarningAmber
+                            )
+                        }
                     }
                 }
             }

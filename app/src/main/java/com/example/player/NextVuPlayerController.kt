@@ -27,9 +27,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.extractor.DefaultExtractorsFactory
 import com.example.data.local.VideoQualityPreset
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
+import kotlin.math.abs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -93,7 +96,10 @@ data class PlayerTelemetryState(
  * - Dynamic Audio & Subtitle track selection + Quality preset caps
  */
 @OptIn(UnstableApi::class)
-class NextVuPlayerController(private val context: Context) {
+class NextVuPlayerController(
+    private val context: Context,
+    preferVodSmoothBuffering: Boolean = false
+) {
 
     private val bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
     private val trackSelector = DefaultTrackSelector(context)
@@ -112,35 +118,75 @@ class NextVuPlayerController(private val context: Context) {
     val exoPlayer: ExoPlayer
     @Volatile
     private var isReleased = false
+    @Volatile
+    private var hudUpdatesEnabled = true
+    @Volatile
+    private var latestBitrateKbps: Long = 0L
+
+    val currentPositionMs: Long
+        get() = if (isReleased) 0L else try {
+            exoPlayer.currentPosition.coerceAtLeast(0L)
+        } catch (_: Throwable) {
+            0L
+        }
+
+    val currentDurationMs: Long
+        get() = if (isReleased) 0L else try {
+            exoPlayer.duration.coerceAtLeast(0L)
+        } catch (_: Throwable) {
+            0L
+        }
 
     init {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("NextVuPlayer/1.1 (Android)")
+            .setUserAgent("NextVuPlayer/1.2 (Android)")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(15_000)
 
         val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
             .setDataSourceFactory(dataSourceFactory)
 
         val renderersFactory = NextRenderersFactory(context)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
+            .setAllowedVideoJoiningTimeMs(5_000L)
+            .forceEnableMediaCodecAsynchronousQueueing()
 
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                10_000, // minBufferMs
-                25_000, // maxBufferMs (capped to prevent RAM pressure alongside large catalogs)
-                2_000,  // bufferForPlaybackMs
-                4_000   // bufferForPlaybackAfterRebufferMs
-            )
-            .setPrioritizeTimeOverSizeThresholds(false)
-            .build()
+        val allocator = DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)
+        val loadControlBuilder = DefaultLoadControl.Builder()
+            .setAllocator(allocator)
+            .setPrioritizeTimeOverSizeThresholds(true)
+
+        val loadControl = if (preferVodSmoothBuffering) {
+            loadControlBuilder
+                .setBufferDurationsMs(
+                    20_000, // minBufferMs: deeper read-ahead for high-bitrate MKV/MP4 movies
+                    50_000, // maxBufferMs: avoids bursty HTTP stalls during action scenes
+                    1_500,  // bufferForPlaybackMs
+                    3_000   // bufferForPlaybackAfterRebufferMs
+                )
+                .setBackBuffer(10_000, true)
+                .build()
+        } else {
+            loadControlBuilder
+                .setBufferDurationsMs(
+                    10_000, // minBufferMs
+                    25_000, // maxBufferMs
+                    1_500,  // bufferForPlaybackMs
+                    3_000   // bufferForPlaybackAfterRebufferMs
+                )
+                .build()
+        }
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .setContentType(
+                if (preferVodSmoothBuffering) C.AUDIO_CONTENT_TYPE_MOVIE else C.AUDIO_CONTENT_TYPE_UNKNOWN
+            )
             .build()
 
         exoPlayer = ExoPlayer.Builder(context, renderersFactory)
@@ -150,10 +196,15 @@ class NextVuPlayerController(private val context: Context) {
             .setBandwidthMeter(bandwidthMeter)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         attachListeners()
+    }
+
+    fun setHudUpdatesEnabled(enabled: Boolean) {
+        hudUpdatesEnabled = enabled
     }
 
     private fun attachListeners() {
@@ -215,7 +266,10 @@ class NextVuPlayerController(private val context: Context) {
             ) {
                 val estimateKbps = (bitrateEstimate / 1000L).coerceAtLeast(0L)
                 if (estimateKbps > 0L) {
-                    _state.update { it.copy(bitrateKbps = estimateKbps) }
+                    latestBitrateKbps = estimateKbps
+                    if (hudUpdatesEnabled && abs(estimateKbps - _state.value.bitrateKbps) >= 100L) {
+                        _state.update { it.copy(bitrateKbps = estimateKbps) }
+                    }
                 }
             }
         })
@@ -505,13 +559,19 @@ class NextVuPlayerController(private val context: Context) {
         try {
             val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
             val dur = exoPlayer.duration.coerceAtLeast(0L)
-            val estimatedKbps = (bandwidthMeter.bitrateEstimate / 1000L).coerceAtLeast(0L)
-            _state.update {
-                it.copy(
-                    positionMs = pos,
-                    durationMs = dur,
-                    bitrateKbps = if (estimatedKbps > 0L) estimatedKbps else it.bitrateKbps
-                )
+            val measuredKbps = (bandwidthMeter.bitrateEstimate / 1000L).coerceAtLeast(0L)
+            val effectiveKbps = if (measuredKbps > 0L) measuredKbps else latestBitrateKbps
+            _state.update { current ->
+                val resolvedKbps = if (effectiveKbps > 0L) effectiveKbps else current.bitrateKbps
+                if (current.positionMs == pos && current.durationMs == dur && current.bitrateKbps == resolvedKbps) {
+                    current
+                } else {
+                    current.copy(
+                        positionMs = pos,
+                        durationMs = dur,
+                        bitrateKbps = resolvedKbps
+                    )
+                }
             }
         } catch (_: Throwable) {
         }

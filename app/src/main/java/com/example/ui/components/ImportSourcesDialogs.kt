@@ -18,8 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -112,7 +109,7 @@ fun ImportSourcesPreviewDialog(
                         color = TextSecondary
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        var selectAllFocused by remember { mutableStateOf(false) }
+                        val selectAllHover = rememberHoverFocusState()
                         Surface(
                             onClick = {
                                 val allSelected = selectedCount == sources.size
@@ -121,13 +118,20 @@ fun ImportSourcesPreviewDialog(
                                 }
                             },
                             shape = RoundedCornerShape(8.dp),
-                            color = if (selectAllFocused) ElectricCyan.copy(alpha = 0.22f) else SurfaceCardVariant,
+                            color = if (selectAllHover.isHighlighted) ElectricCyan.copy(alpha = 0.24f) else SurfaceCardVariant,
                             border = BorderStroke(
-                                if (selectAllFocused) 2.dp else 1.dp,
-                                if (selectAllFocused) ElectricCyan else SurfaceBorderSubtle
+                                if (selectAllHover.isHighlighted) 2.dp else 1.dp,
+                                if (selectAllHover.isHighlighted) ElectricCyan else SurfaceBorderSubtle
                             ),
                             modifier = Modifier
-                                .onFocusChanged { selectAllFocused = it.isFocused }
+                                .trackHoverFocus(selectAllHover)
+                                .thickBlackHoverOutline(
+                                    highlighted = selectAllHover.isHighlighted,
+                                    shape = RoundedCornerShape(8.dp),
+                                    blackWidth = 3.dp,
+                                    contrastHaloColor = ElectricCyan.copy(alpha = 0.9f),
+                                    haloPadding = 1.2.dp
+                                )
                                 .minimumInteractiveComponentSize()
                         ) {
                             Text(
@@ -245,8 +249,7 @@ fun ImportSourcesPreviewDialog(
             }
         },
         confirmButton = {
-            var confirmFocused by remember { mutableStateOf(false) }
-            Button(
+            NextVuButton(
                 onClick = {
                     val chosen = sources.filterIndexed { index, _ ->
                         selectedStates.getOrElse(index) { false }
@@ -256,13 +259,7 @@ fun ImportSourcesPreviewDialog(
                     }
                 },
                 enabled = selectedCount > 0,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (confirmFocused) Color.White else ElectricCyan,
-                    contentColor = BgCharcoal
-                ),
-                border = if (confirmFocused) BorderStroke(2.dp, ElectricCyan) else null,
                 modifier = Modifier
-                    .onFocusChanged { confirmFocused = it.isFocused }
                     .minimumInteractiveComponentSize()
                     .testTag("import_preview_confirm_btn")
             ) {
@@ -270,16 +267,13 @@ fun ImportSourcesPreviewDialog(
             }
         },
         dismissButton = {
-            var cancelFocused by remember { mutableStateOf(false) }
-            TextButton(
+            NextVuTextButton(
                 onClick = onDismiss,
-                modifier = Modifier
-                    .onFocusChanged { cancelFocused = it.isFocused }
-                    .minimumInteractiveComponentSize()
+                modifier = Modifier.minimumInteractiveComponentSize()
             ) {
                 Text(
                     text = cancelLabel,
-                    color = if (cancelFocused) ElectricCyan else TextSecondary
+                    color = TextSecondary
                 )
             }
         }
@@ -328,17 +322,10 @@ fun ImportCredentialsWarningDialog(
             }
         },
         confirmButton = {
-            var confirmFocused by remember { mutableStateOf(false) }
-            Button(
+            NextVuButton(
                 onClick = onConfirmImport,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (confirmFocused) Color.White else ElectricCyan,
-                    contentColor = BgCharcoal
-                ),
-                border = if (confirmFocused) BorderStroke(2.dp, ElectricCyan) else null,
                 modifier = Modifier
                     .focusRequester(confirmFocusRequester)
-                    .onFocusChanged { confirmFocused = it.isFocused }
                     .minimumInteractiveComponentSize()
                     .testTag("import_warning_confirm_btn")
             ) {
@@ -346,16 +333,13 @@ fun ImportCredentialsWarningDialog(
             }
         },
         dismissButton = {
-            var cancelFocused by remember { mutableStateOf(false) }
-            TextButton(
+            NextVuTextButton(
                 onClick = onDismiss,
-                modifier = Modifier
-                    .onFocusChanged { cancelFocused = it.isFocused }
-                    .minimumInteractiveComponentSize()
+                modifier = Modifier.minimumInteractiveComponentSize()
             ) {
                 Text(
                     text = cancelLabel,
-                    color = if (cancelFocused) ElectricCyan else TextSecondary
+                    color = TextSecondary
                 )
             }
         }

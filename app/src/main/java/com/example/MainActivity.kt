@@ -2,6 +2,7 @@ package com.example
 
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Home
@@ -48,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,6 +69,9 @@ import com.example.data.remote.XtreamLiveChannel
 import com.example.data.remote.XtreamMovie
 import com.example.data.remote.XtreamSeries
 import com.example.ui.components.QuickSourceSwitchDialog
+import com.example.ui.components.rememberHoverFocusState
+import com.example.ui.components.thickBlackHoverOutline
+import com.example.ui.components.trackHoverFocus
 import com.example.ui.screens.FullScreenPlayerScreen
 import com.example.ui.screens.HomeDashboardScreen
 import com.example.ui.screens.LiveTvScreen
@@ -154,11 +160,13 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
     val isRefreshingLive by viewModel.isRefreshingLive.collectAsState()
     val isRefreshingMovies by viewModel.isRefreshingMovies.collectAsState()
     val isRefreshingSeries by viewModel.isRefreshingSeries.collectAsState()
+    val isReloadingPlaylists by viewModel.isReloadingPlaylists.collectAsState()
     val testConnectionState by viewModel.testConnectionState.collectAsState()
     val selectedMovieDetail by viewModel.selectedMovieDetail.collectAsState()
     val selectedSeriesDetail by viewModel.selectedSeriesDetail.collectAsState()
     val channelEpgMap by viewModel.channelEpgMap.collectAsState()
     val activePlaybackTarget by viewModel.activePlaybackTarget.collectAsState()
+    val context = LocalContext.current
 
     var showQuickSwitchDialog by remember { mutableStateOf(false) }
 
@@ -205,6 +213,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                     ) {
                         navItems.forEach { item ->
                             val selected = isTopRouteSelected(currentDest, item.route)
+                            val hoverState = rememberHoverFocusState()
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = { navigateTopLevel(item.route) },
@@ -228,7 +237,14 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                     unselectedIconColor = TextMuted,
                                     unselectedTextColor = TextMuted
                                 ),
-                                modifier = Modifier.testTag(item.testTag)
+                                modifier = Modifier
+                                    .trackHoverFocus(hoverState)
+                                    .thickBlackHoverOutline(
+                                        highlighted = hoverState.isHighlighted,
+                                        shape = RoundedCornerShape(14.dp),
+                                        contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                                    )
+                                    .testTag(item.testTag)
                             )
                         }
                     }
@@ -250,6 +266,7 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                     ) {
                         navItems.forEach { item ->
                             val selected = isTopRouteSelected(currentDest, item.route)
+                            val hoverState = rememberHoverFocusState()
                             NavigationRailItem(
                                 selected = selected,
                                 onClick = { navigateTopLevel(item.route) },
@@ -273,7 +290,14 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                     unselectedIconColor = TextMuted,
                                     unselectedTextColor = TextMuted
                                 ),
-                                modifier = Modifier.testTag(item.testTag)
+                                modifier = Modifier
+                                    .trackHoverFocus(hoverState)
+                                    .thickBlackHoverOutline(
+                                        highlighted = hoverState.isHighlighted,
+                                        shape = RoundedCornerShape(14.dp),
+                                        contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                                    )
+                                    .testTag(item.testTag)
                             )
                         }
                     }
@@ -517,9 +541,15 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
                                 sources = sources,
                                 activeSource = activeSource,
                                 isOfflineMode = isOfflineMode,
+                                isReloadingPlaylists = isReloadingPlaylists,
                                 testConnectionState = testConnectionState,
                                 openAddDialogInitially = openAdd,
                                 onOpenQuickSwitch = { showQuickSwitchDialog = true },
+                                onReloadPlaylists = {
+                                    viewModel.reloadActiveSourcePlaylists { _, msg ->
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 onTestConnection = { url, user, pass ->
                                     viewModel.testSourceConnection(url, user, pass)
                                 },
@@ -582,26 +612,13 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
             }
         }
 
-        // Global Full-Screen ExoPlayer Overlay
-        activePlaybackTarget?.let { target ->
-            val epgList = if (target is PlaybackTarget.Live) {
-                channelEpgMap[target.channel.streamId].orEmpty()
-            } else emptyList()
-
-            FullScreenPlayerScreen(
-                target = target,
-                settings = settings,
-                epgList = epgList,
-                onBack = { viewModel.clearPlaybackTarget() },
-                onSaveProgress = { t, pos, dur -> viewModel.saveCurrentProgress(t, pos, dur) },
-                onToggleBitrateHud = { viewModel.setShowBitrateOverlay(it) },
-                onSelectQuality = { viewModel.setVideoQuality(it) },
-                onToggleAutoNextEpisode = { viewModel.setAutoNextEpisode(it) },
-                onPlayCatchUp = { ch, epg -> viewModel.playCatchUpProgram(ch, epg) },
-                onRetryLiveWithTs = { ch -> viewModel.playLiveChannel(ch, useTsFallback = true) },
-                onPlayNextEpisode = { series, ep, eps -> viewModel.playEpisode(series, ep, eps) }
-            )
-        }
+        // Global Full-Screen ExoPlayer Overlay (isolated from continueWatching churn)
+        GlobalFullScreenPlayerOverlay(
+            viewModel = viewModel,
+            target = activePlaybackTarget,
+            settings = settings,
+            channelEpgMap = channelEpgMap
+        )
     }
 
     if (showQuickSwitchDialog) {
@@ -613,6 +630,33 @@ fun NextVuAppRoot(viewModel: NextVuViewModel) {
             onDismiss = { showQuickSwitchDialog = false }
         )
     }
+}
+
+@Composable
+private fun GlobalFullScreenPlayerOverlay(
+    viewModel: NextVuViewModel,
+    target: PlaybackTarget?,
+    settings: com.example.data.local.UserSettings,
+    channelEpgMap: Map<String, List<com.example.data.remote.XtreamEpgItem>>
+) {
+    if (target == null) return
+    val epgList = if (target is PlaybackTarget.Live) {
+        channelEpgMap[target.channel.streamId].orEmpty()
+    } else emptyList()
+
+    FullScreenPlayerScreen(
+        target = target,
+        settings = settings,
+        epgList = epgList,
+        onBack = { viewModel.clearPlaybackTarget() },
+        onSaveProgress = { t, pos, dur -> viewModel.saveCurrentProgress(t, pos, dur) },
+        onToggleBitrateHud = { viewModel.setShowBitrateOverlay(it) },
+        onSelectQuality = { viewModel.setVideoQuality(it) },
+        onToggleAutoNextEpisode = { viewModel.setAutoNextEpisode(it) },
+        onPlayCatchUp = { ch, epg -> viewModel.playCatchUpProgram(ch, epg) },
+        onRetryLiveWithTs = { ch -> viewModel.playLiveChannel(ch, useTsFallback = true) },
+        onPlayNextEpisode = { series, ep, eps -> viewModel.playEpisode(series, ep, eps) }
+    )
 }
 
 private fun isTopRouteSelected(

@@ -115,24 +115,27 @@ fun PlayerEpgSlidePanel(
                         style = MaterialTheme.typography.titleMedium,
                         color = ElectricCyan
                     )
-                    var closeFocused by remember { mutableStateOf(false) }
+                    val closeHover = rememberHoverFocusState()
+                    val closeShape = RoundedCornerShape(8.dp)
                     Surface(
                         onClick = onClose,
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (closeFocused) ElectricCyan.copy(alpha = 0.25f) else Color.Transparent,
-                        border = BorderStroke(
-                            if (closeFocused) 2.dp else 1.dp,
-                            if (closeFocused) ElectricCyan else SurfaceBorderSubtle
-                        ),
+                        shape = closeShape,
+                        color = if (closeHover.isHighlighted) ElectricCyan.copy(alpha = 0.25f) else Color.Transparent,
+                        border = if (closeHover.isHighlighted) null else BorderStroke(1.dp, SurfaceBorderSubtle),
                         modifier = Modifier
                             .focusRequester(closeFocusRequester)
-                            .onFocusChanged { closeFocused = it.isFocused }
+                            .trackHoverFocus(closeHover)
+                            .thickBlackHoverOutline(
+                                highlighted = closeHover.isHighlighted,
+                                shape = closeShape,
+                                contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                            )
                             .minimumInteractiveComponentSize()
                     ) {
                         Text(
                             text = "Close",
                             style = MaterialTheme.typography.labelLarge,
-                            color = if (closeFocused) Color.White else TextSecondary,
+                            color = if (closeHover.isHighlighted) Color.White else TextSecondary,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
@@ -226,7 +229,7 @@ fun Player4kWarningDialog(
         },
         text = { Text(message, color = TextSecondary) },
         confirmButton = {
-            Button(
+            NextVuButton(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = BgCharcoal),
                 modifier = Modifier.testTag("confirm_4k_warning_button")
@@ -235,7 +238,7 @@ fun Player4kWarningDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onUse1080p) {
+            NextVuTextButton(onClick = onUse1080p) {
                 Text("Use 1080p", color = TextSecondary)
             }
         }
@@ -277,7 +280,7 @@ fun PlayerResolutionDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            NextVuTextButton(onClick = onDismiss) {
                 Text(cancelLabel, color = TextSecondary)
             }
         }
@@ -337,7 +340,7 @@ fun PlayerAudioTrackDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            NextVuTextButton(onClick = onDismiss) {
                 Text(cancelLabel, color = TextSecondary)
             }
         }
@@ -386,7 +389,7 @@ fun PlayerSubtitleTrackDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            NextVuTextButton(onClick = onDismiss) {
                 Text(cancelLabel, color = TextSecondary)
             }
         }

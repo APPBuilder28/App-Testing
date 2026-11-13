@@ -36,23 +36,15 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -83,6 +75,10 @@ import com.example.ui.components.EditPlaylistsDialog
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.LoadingStateView
+import com.example.ui.components.NextVuButton
+import com.example.ui.components.NextVuFilterChip
+import com.example.ui.components.NextVuIconButton
+import com.example.ui.components.NextVuOutlinedButton
 import com.example.ui.components.NextVuTopBar
 import com.example.ui.components.PosterCard
 import com.example.ui.theme.BgCharcoal
@@ -98,7 +94,6 @@ import com.example.viewmodel.CatalogUiState
 import com.example.viewmodel.MediaSortOption
 import com.example.viewmodel.MoviesCatalogData
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoviesScreen(
     activeSource: XtreamSourceProfile?,
@@ -230,7 +225,7 @@ fun MoviesScreen(
 
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = favoritesOnly,
                                 onClick = { favoritesOnly = !favoritesOnly },
                                 label = { Text(strings.favoritesOnly) },
@@ -240,17 +235,13 @@ fun MoviesScreen(
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp)
                                     )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
-                                )
+                                }
                             )
                         }
 
                         item {
                             Box {
-                                FilterChip(
+                                NextVuFilterChip(
                                     selected = selectedYear != null,
                                     onClick = { showYearMenu = true },
                                     label = { Text(selectedYear ?: "Year: All") }
@@ -276,7 +267,7 @@ fun MoviesScreen(
 
                         item {
                             Box {
-                                FilterChip(
+                                NextVuFilterChip(
                                     selected = minRating > 0.0,
                                     onClick = { showRatingMenu = true },
                                     label = { Text(if (minRating > 0) "Rating ≥ ${minRating.toInt()}★" else "Rating: All") }
@@ -298,7 +289,7 @@ fun MoviesScreen(
 
                         item {
                             Box {
-                                FilterChip(
+                                NextVuFilterChip(
                                     selected = true,
                                     onClick = { showSortMenu = true },
                                     leadingIcon = { Icon(Icons.Rounded.Sort, contentDescription = null, modifier = Modifier.size(16.dp)) },
@@ -338,37 +329,29 @@ fun MoviesScreen(
                             )
                         }
                         item {
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = activeCategoryId == null,
                                 onClick = { selectedCategoryId = null },
-                                label = { Text(strings.allCategories) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
-                                )
+                                label = { Text(strings.allCategories) }
                             )
                         }
                         itemsIndexed(
                             categories,
                             key = { idx, cat -> "mcat_${cat.categoryId}_$idx" }
                         ) { _, cat ->
-                            FilterChip(
+                            NextVuFilterChip(
                                 selected = activeCategoryId == cat.categoryId,
                                 onClick = { selectedCategoryId = cat.categoryId },
-                                label = { Text(cat.categoryName) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
-                                )
+                                label = { Text(cat.categoryName) }
                             )
                         }
                     }
                 }
 
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.weight(1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
                 ) {
                     if (filtered.isEmpty()) {
                         EmptyStateView(
@@ -497,14 +480,15 @@ fun MovieDetailScreen(
                                     )
                                 )
                         )
-                        IconButton(
+                        NextVuIconButton(
                             onClick = onBack,
+                            containerColor = BgCharcoal.copy(alpha = 0.72f),
+                            hoverContainerColor = ElectricCyan.copy(alpha = 0.28f),
+                            contentColor = TextPrimary,
+                            visualSize = 44.dp,
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .padding(12.dp)
-                                .clip(CircleShape)
-                                .background(BgCharcoal.copy(alpha = 0.72f))
-                                .minimumInteractiveComponentSize()
                                 .testTag("movie_detail_back")
                         ) {
                             Icon(
@@ -578,9 +562,8 @@ fun MovieDetailScreen(
                                 "${strings.resumePlayback} (${String.format("%02d:%02d", mins, secs)})"
                             } else strings.watchNow
 
-                            Button(
+                            NextVuButton(
                                 onClick = { onWatchMovie(movie) },
-                                colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = BgCharcoal),
                                 modifier = Modifier
                                     .weight(1f)
                                     .minimumInteractiveComponentSize()
@@ -591,7 +574,7 @@ fun MovieDetailScreen(
                                 Text(resumeLabel, fontWeight = FontWeight.Bold)
                             }
 
-                            OutlinedButton(
+                            NextVuOutlinedButton(
                                 onClick = { onToggleWatchlist(movie) },
                                 border = BorderStroke(1.dp, if (isWatchlisted) ElectricCyan else SurfaceBorderSubtle),
                                 modifier = Modifier

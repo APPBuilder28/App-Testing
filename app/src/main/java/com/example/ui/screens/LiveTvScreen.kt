@@ -28,13 +28,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +70,7 @@ import com.example.ui.components.LiveTvGuideTopBar
 import com.example.ui.components.LiveTvScaleControlPanel
 import com.example.ui.components.LiveTvUiMetrics
 import com.example.ui.components.LoadingStateView
+import com.example.ui.components.NextVuTextButton
 import com.example.ui.theme.BgCharcoal
 import com.example.ui.theme.ElectricCyan
 import com.example.ui.theme.SurfaceBorderSubtle
@@ -84,7 +82,6 @@ import com.example.viewmodel.LiveCatalogData
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveTvScreen(
     activeSource: XtreamSourceProfile?,
@@ -411,9 +408,7 @@ fun LiveTvScreen(
                             )
                             HorizontalDivider(color = SurfaceBorderSubtle.copy(alpha = 0.55f))
 
-                            PullToRefreshBox(
-                                isRefreshing = isRefreshing,
-                                onRefresh = onRefresh,
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
@@ -564,7 +559,7 @@ fun LiveTvScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showAudioDialog = false }) {
+                NextVuTextButton(onClick = { showAudioDialog = false }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }
@@ -619,7 +614,7 @@ fun LiveTvScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showSubtitleDialog = false }) {
+                NextVuTextButton(onClick = { showSubtitleDialog = false }) {
                     Text(strings.cancel, color = TextSecondary)
                 }
             }

@@ -242,12 +242,24 @@ fun LiveTvGuideTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        val sidebarHover = rememberHoverFocusState()
+        val pillShape = RoundedCornerShape(10.dp)
         Surface(
             onClick = onToggleSidebar,
-            shape = RoundedCornerShape(10.dp),
-            color = if (sidebarExpanded) ElectricCyan.copy(alpha = 0.16f) else SurfaceCardVariant,
+            shape = pillShape,
+            color = when {
+                sidebarHover.isHighlighted -> ElectricCyan.copy(alpha = 0.28f)
+                sidebarExpanded -> ElectricCyan.copy(alpha = 0.16f)
+                else -> SurfaceCardVariant
+            },
             modifier = Modifier
                 .size(metrics.toolbarControlHeight)
+                .trackHoverFocus(sidebarHover)
+                .thickBlackHoverOutline(
+                    highlighted = sidebarHover.isHighlighted,
+                    shape = pillShape,
+                    contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                )
                 .testTag("toggle_live_sidebar_btn")
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -284,26 +296,27 @@ fun LiveTvGuideTopBar(
         )
 
         // Edit Playlists Filter Pill
-        var editPlaylistsFocused by remember { mutableStateOf(false) }
+        val editPlaylistsHover = rememberHoverFocusState()
         Surface(
             onClick = onEditPlaylists,
-            shape = RoundedCornerShape(10.dp),
+            shape = pillShape,
             color = when {
-                editPlaylistsFocused -> ElectricCyan.copy(alpha = 0.24f)
+                editPlaylistsHover.isHighlighted -> ElectricCyan.copy(alpha = 0.28f)
                 hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.18f)
                 else -> SurfaceCard
             },
-            border = BorderStroke(
-                width = if (editPlaylistsFocused) 2.dp else 1.dp,
-                color = when {
-                    editPlaylistsFocused -> ElectricCyan
-                    hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.72f)
-                    else -> SurfaceBorderSubtle
-                }
+            border = if (editPlaylistsHover.isHighlighted) null else BorderStroke(
+                width = 1.dp,
+                color = if (hasCustomPlaylistFilter) ElectricCyan.copy(alpha = 0.72f) else SurfaceBorderSubtle
             ),
             modifier = Modifier
                 .height(metrics.toolbarControlHeight)
-                .onFocusChanged { editPlaylistsFocused = it.isFocused }
+                .trackHoverFocus(editPlaylistsHover)
+                .thickBlackHoverOutline(
+                    highlighted = editPlaylistsHover.isHighlighted,
+                    shape = pillShape,
+                    contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                )
                 .testTag("live_edit_playlists_btn")
         ) {
             Row(
@@ -314,7 +327,7 @@ fun LiveTvGuideTopBar(
                 Icon(
                     imageVector = Icons.Rounded.Checklist,
                     contentDescription = "Edit Playlists",
-                    tint = if (editPlaylistsFocused || hasCustomPlaylistFilter) ElectricCyan else TextSecondary,
+                    tint = if (editPlaylistsHover.isHighlighted || hasCustomPlaylistFilter) ElectricCyan else TextSecondary,
                     modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
                 )
                 if (!isCompact) {
@@ -322,23 +335,34 @@ fun LiveTvGuideTopBar(
                         text = "Playlists",
                         fontSize = metrics.playlistFontSp,
                         fontWeight = if (hasCustomPlaylistFilter) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (editPlaylistsFocused || hasCustomPlaylistFilter) ElectricCyan else TextPrimary
+                        color = if (editPlaylistsHover.isHighlighted || hasCustomPlaylistFilter) ElectricCyan else TextPrimary
                     )
                 }
             }
         }
 
         // UI Scale 0-100% Toggle Pill
+        val scaleHover = rememberHoverFocusState()
         Surface(
             onClick = onToggleScalePanel,
-            shape = RoundedCornerShape(10.dp),
-            color = if (showScalePanel) ElectricCyan.copy(alpha = 0.2f) else SurfaceCard,
-            border = BorderStroke(
+            shape = pillShape,
+            color = when {
+                scaleHover.isHighlighted -> ElectricCyan.copy(alpha = 0.28f)
+                showScalePanel -> ElectricCyan.copy(alpha = 0.2f)
+                else -> SurfaceCard
+            },
+            border = if (scaleHover.isHighlighted) null else BorderStroke(
                 1.dp,
                 if (showScalePanel) ElectricCyan else SurfaceBorderSubtle
             ),
             modifier = Modifier
                 .height(metrics.toolbarControlHeight)
+                .trackHoverFocus(scaleHover)
+                .thickBlackHoverOutline(
+                    highlighted = scaleHover.isHighlighted,
+                    shape = pillShape,
+                    contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                )
                 .testTag("live_ui_scale_btn")
         ) {
             Row(
@@ -362,16 +386,27 @@ fun LiveTvGuideTopBar(
         }
 
         // Compact Favorites Toggle
+        val favHover = rememberHoverFocusState()
         Surface(
             onClick = onToggleFavorites,
-            shape = RoundedCornerShape(10.dp),
-            color = if (favoritesOnly) ElectricCyan.copy(alpha = 0.18f) else SurfaceCard,
-            border = BorderStroke(
+            shape = pillShape,
+            color = when {
+                favHover.isHighlighted -> ElectricCyan.copy(alpha = 0.28f)
+                favoritesOnly -> ElectricCyan.copy(alpha = 0.18f)
+                else -> SurfaceCard
+            },
+            border = if (favHover.isHighlighted) null else BorderStroke(
                 1.dp,
                 if (favoritesOnly) ElectricCyan.copy(alpha = 0.7f) else SurfaceBorderSubtle
             ),
             modifier = Modifier
                 .height(metrics.toolbarControlHeight)
+                .trackHoverFocus(favHover)
+                .thickBlackHoverOutline(
+                    highlighted = favHover.isHighlighted,
+                    shape = pillShape,
+                    contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                )
                 .testTag("live_favorites_filter")
         ) {
             Row(
@@ -381,7 +416,7 @@ fun LiveTvGuideTopBar(
                 Icon(
                     imageVector = if (favoritesOnly) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
                     contentDescription = "Favorites",
-                    tint = if (favoritesOnly) ElectricCyan else TextSecondary,
+                    tint = if (favoritesOnly || favHover.isHighlighted) ElectricCyan else TextSecondary,
                     modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
                 )
                 if (!isCompact) {
@@ -389,23 +424,34 @@ fun LiveTvGuideTopBar(
                     Text(
                         text = "Fav",
                         fontSize = metrics.playlistFontSp,
-                        color = if (favoritesOnly) ElectricCyan else TextSecondary
+                        color = if (favoritesOnly || favHover.isHighlighted) ElectricCyan else TextSecondary
                     )
                 }
             }
         }
 
         // EPG Toggle Pill
+        val epgHover = rememberHoverFocusState()
         Surface(
             onClick = onToggleEpg,
-            shape = RoundedCornerShape(10.dp),
-            color = if (showEpgInfo) DeepViolet.copy(alpha = 0.30f) else SurfaceCard,
-            border = BorderStroke(
+            shape = pillShape,
+            color = when {
+                epgHover.isHighlighted -> ElectricCyan.copy(alpha = 0.28f)
+                showEpgInfo -> DeepViolet.copy(alpha = 0.30f)
+                else -> SurfaceCard
+            },
+            border = if (epgHover.isHighlighted) null else BorderStroke(
                 1.dp,
                 if (showEpgInfo) ElectricCyan.copy(alpha = 0.55f) else SurfaceBorderSubtle
             ),
             modifier = Modifier
                 .height(metrics.toolbarControlHeight)
+                .trackHoverFocus(epgHover)
+                .thickBlackHoverOutline(
+                    highlighted = epgHover.isHighlighted,
+                    shape = pillShape,
+                    contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                )
                 .testTag("live_epg_toggle")
         ) {
             Row(
@@ -415,7 +461,7 @@ fun LiveTvGuideTopBar(
                 Icon(
                     imageVector = Icons.Rounded.Schedule,
                     contentDescription = "EPG",
-                    tint = if (showEpgInfo) ElectricCyan else TextSecondary,
+                    tint = if (showEpgInfo || epgHover.isHighlighted) ElectricCyan else TextSecondary,
                     modifier = Modifier.size((metrics.toolbarControlHeight * 0.45f).coerceAtLeast(14.dp))
                 )
                 if (!isCompact) {
@@ -431,16 +477,24 @@ fun LiveTvGuideTopBar(
 
         // Active Source Selector Pill
         if (activeSource != null) {
+            val sourceHover = rememberHoverFocusState()
+            val sourceShape = RoundedCornerShape(20.dp)
             Surface(
                 onClick = onOpenQuickSwitch,
-                shape = RoundedCornerShape(20.dp),
-                color = SurfaceCard,
-                border = BorderStroke(
+                shape = sourceShape,
+                color = if (sourceHover.isHighlighted) ElectricCyan.copy(alpha = 0.25f) else SurfaceCard,
+                border = if (sourceHover.isHighlighted) null else BorderStroke(
                     1.dp,
                     if (isOfflineMode) ErrorRose.copy(alpha = 0.7f) else SurfaceBorderSubtle
                 ),
                 modifier = Modifier
                     .height(metrics.toolbarControlHeight)
+                    .trackHoverFocus(sourceHover)
+                    .thickBlackHoverOutline(
+                        highlighted = sourceHover.isHighlighted,
+                        shape = sourceShape,
+                        contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+                    )
                     .testTag("live_source_pill")
             ) {
                 Row(
@@ -541,7 +595,7 @@ fun LiveTvScaleControlPanel(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(0, 25, 50, 75, 100).forEach { preset ->
-                        FilterChip(
+                        NextVuFilterChip(
                             selected = scalePercent == preset,
                             onClick = { onScaleChange(preset) },
                             label = {
@@ -557,7 +611,7 @@ fun LiveTvScaleControlPanel(
                         )
                     }
                 }
-                TextButton(onClick = onDismiss) {
+                NextVuTextButton(onClick = onDismiss) {
                     Text("Done", color = ElectricCyan)
                 }
             }
@@ -846,9 +900,11 @@ fun LiveHeroHeaderSection(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
+                        NextVuIconButton(
                             onClick = onTogglePlayPause,
-                            modifier = Modifier.size(metrics.previewControlSize)
+                            visualSize = metrics.previewControlSize,
+                            enforceMinTouchTarget = false,
+                            hoverContainerColor = ElectricCyan.copy(alpha = 0.28f)
                         ) {
                             Icon(
                                 imageVector = if (previewTelemetry.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -857,9 +913,11 @@ fun LiveHeroHeaderSection(
                                 modifier = Modifier.size((metrics.previewControlSize * 0.65f).coerceAtLeast(13.dp))
                             )
                         }
-                        IconButton(
+                        NextVuIconButton(
                             onClick = onToggleMute,
-                            modifier = Modifier.size(metrics.previewControlSize)
+                            visualSize = metrics.previewControlSize,
+                            enforceMinTouchTarget = false,
+                            hoverContainerColor = ElectricCyan.copy(alpha = 0.28f)
                         ) {
                             Icon(
                                 imageVector = if (previewTelemetry.volume <= 0.01f) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
@@ -869,9 +927,11 @@ fun LiveHeroHeaderSection(
                             )
                         }
                         if (!isCompact && metrics.scalePercent >= 25) {
-                            IconButton(
+                            NextVuIconButton(
                                 onClick = onOpenAudioDialog,
-                                modifier = Modifier.size(metrics.previewControlSize)
+                                visualSize = metrics.previewControlSize,
+                                enforceMinTouchTarget = false,
+                                hoverContainerColor = ElectricCyan.copy(alpha = 0.28f)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Audiotrack,
@@ -880,9 +940,11 @@ fun LiveHeroHeaderSection(
                                     modifier = Modifier.size((metrics.previewControlSize * 0.55f).coerceAtLeast(12.dp))
                                 )
                             }
-                            IconButton(
+                            NextVuIconButton(
                                 onClick = onOpenSubtitleDialog,
-                                modifier = Modifier.size(metrics.previewControlSize)
+                                visualSize = metrics.previewControlSize,
+                                enforceMinTouchTarget = false,
+                                hoverContainerColor = ElectricCyan.copy(alpha = 0.28f)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.ClosedCaption,
@@ -895,11 +957,12 @@ fun LiveHeroHeaderSection(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
+                        NextVuIconButton(
                             onClick = onExpandFullScreen,
-                            modifier = Modifier
-                                .size(metrics.previewControlSize)
-                                .testTag("embedded_player_fullscreen_btn")
+                            visualSize = metrics.previewControlSize,
+                            enforceMinTouchTarget = false,
+                            hoverContainerColor = ElectricCyan.copy(alpha = 0.28f),
+                            modifier = Modifier.testTag("embedded_player_fullscreen_btn")
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Fullscreen,
@@ -908,11 +971,12 @@ fun LiveHeroHeaderSection(
                                 modifier = Modifier.size((metrics.previewControlSize * 0.65f).coerceAtLeast(13.dp))
                             )
                         }
-                        IconButton(
+                        NextVuIconButton(
                             onClick = onClosePreview,
-                            modifier = Modifier
-                                .size(metrics.previewControlSize)
-                                .testTag("embedded_player_close_btn")
+                            visualSize = metrics.previewControlSize,
+                            enforceMinTouchTarget = false,
+                            hoverContainerColor = ElectricCyan.copy(alpha = 0.28f),
+                            modifier = Modifier.testTag("embedded_player_close_btn")
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Close,
@@ -968,7 +1032,7 @@ fun LivePlaylistsSidebar(
     onEditPlaylists: () -> Unit,
     onSelectPlaylist: (LivePlaylistSelection) -> Unit
 ) {
-    var editHeaderFocused by remember { mutableStateOf(false) }
+    val editHeaderHover = rememberHoverFocusState()
 
     Surface(
         color = BgCharcoalElevated,
@@ -1005,24 +1069,28 @@ fun LivePlaylistsSidebar(
                     )
                 }
 
+                val editBtnShape = RoundedCornerShape(7.dp)
                 Surface(
                     onClick = onEditPlaylists,
-                    shape = RoundedCornerShape(7.dp),
+                    shape = editBtnShape,
                     color = when {
-                        editHeaderFocused -> ElectricCyan.copy(alpha = 0.24f)
+                        editHeaderHover.isHighlighted -> ElectricCyan.copy(alpha = 0.28f)
                         hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.18f)
                         else -> SurfaceCardVariant
                     },
-                    border = BorderStroke(
-                        width = if (editHeaderFocused) 1.5.dp else 1.dp,
-                        color = when {
-                            editHeaderFocused -> ElectricCyan
-                            hasCustomPlaylistFilter -> ElectricCyan.copy(alpha = 0.72f)
-                            else -> SurfaceBorderSubtle
-                        }
+                    border = if (editHeaderHover.isHighlighted) null else BorderStroke(
+                        width = 1.dp,
+                        color = if (hasCustomPlaylistFilter) ElectricCyan.copy(alpha = 0.72f) else SurfaceBorderSubtle
                     ),
                     modifier = Modifier
-                        .onFocusChanged { editHeaderFocused = it.isFocused }
+                        .trackHoverFocus(editHeaderHover)
+                        .thickBlackHoverOutline(
+                            highlighted = editHeaderHover.isHighlighted,
+                            shape = editBtnShape,
+                            blackWidth = 3.dp,
+                            contrastHaloColor = ElectricCyan.copy(alpha = 0.9f),
+                            haloPadding = 1.2.dp
+                        )
                         .testTag("live_sidebar_edit_playlists_btn")
                 ) {
                     Row(
@@ -1033,14 +1101,14 @@ fun LivePlaylistsSidebar(
                         Icon(
                             imageVector = Icons.Rounded.Checklist,
                             contentDescription = "Edit Playlists",
-                            tint = if (editHeaderFocused || hasCustomPlaylistFilter) ElectricCyan else TextSecondary,
+                            tint = if (editHeaderHover.isHighlighted || hasCustomPlaylistFilter) ElectricCyan else TextSecondary,
                             modifier = Modifier.size(metrics.playlistIconSize)
                         )
                         Text(
                             text = "Edit",
                             fontSize = metrics.playlistCountSp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (editHeaderFocused || hasCustomPlaylistFilter) ElectricCyan else TextPrimary
+                            color = if (editHeaderHover.isHighlighted || hasCustomPlaylistFilter) ElectricCyan else TextPrimary
                         )
                     }
                 }
@@ -1372,9 +1440,11 @@ fun LiveEpgGuideChannelRow(
                         .padding(vertical = 4.dp)
                 )
 
-                IconButton(
+                NextVuIconButton(
                     onClick = onToggleFavorite,
-                    modifier = Modifier.size((metrics.guideRowHeight * 0.62f).coerceAtLeast(24.dp))
+                    visualSize = (metrics.guideRowHeight * 0.62f).coerceAtLeast(24.dp),
+                    enforceMinTouchTarget = false,
+                    hoverContainerColor = ElectricCyan.copy(alpha = 0.25f)
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,

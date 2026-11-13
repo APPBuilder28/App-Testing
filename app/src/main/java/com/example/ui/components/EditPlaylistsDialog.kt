@@ -69,27 +69,30 @@ fun EditPlaylistsChipButton(
     testTag: String,
     modifier: Modifier = Modifier
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val hoverState = rememberHoverFocusState()
+    val highlighted = hoverState.isHighlighted
+    val chipShape = RoundedCornerShape(10.dp)
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = chipShape,
         color = when {
-            isFocused -> ElectricCyan.copy(alpha = 0.24f)
+            highlighted -> ElectricCyan.copy(alpha = 0.28f)
             isCustomActive -> ElectricCyan.copy(alpha = 0.16f)
             else -> SurfaceCard
         },
-        border = BorderStroke(
-            width = if (isFocused) 2.dp else 1.dp,
-            color = when {
-                isFocused -> ElectricCyan
-                isCustomActive -> ElectricCyan.copy(alpha = 0.72f)
-                else -> SurfaceBorderSubtle
-            }
+        border = if (highlighted) null else BorderStroke(
+            width = 1.dp,
+            color = if (isCustomActive) ElectricCyan.copy(alpha = 0.72f) else SurfaceBorderSubtle
         ),
         modifier = modifier
             .heightIn(min = 36.dp)
-            .onFocusChanged { isFocused = it.isFocused }
+            .trackHoverFocus(hoverState)
+            .thickBlackHoverOutline(
+                highlighted = highlighted,
+                shape = chipShape,
+                contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+            )
             .testTag(testTag)
     ) {
         Row(
@@ -100,7 +103,7 @@ fun EditPlaylistsChipButton(
             Icon(
                 imageVector = Icons.Rounded.Checklist,
                 contentDescription = "Edit Playlists",
-                tint = if (isFocused || isCustomActive) ElectricCyan else TextSecondary,
+                tint = if (highlighted || isCustomActive) ElectricCyan else TextSecondary,
                 modifier = Modifier.size(16.dp)
             )
             Text(
@@ -110,7 +113,7 @@ fun EditPlaylistsChipButton(
                     "Edit Playlists"
                 },
                 style = MaterialTheme.typography.labelLarge,
-                color = if (isFocused || isCustomActive) ElectricCyan else TextPrimary
+                color = if (highlighted || isCustomActive) ElectricCyan else TextPrimary
             )
         }
     }
@@ -193,11 +196,11 @@ fun EditPlaylistsDialog(
                         }
                     }
 
-                    IconButton(
+                    NextVuIconButton(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .testTag("edit_playlists_close_btn")
+                        containerColor = SurfaceCardVariant,
+                        hoverContainerColor = ElectricCyan.copy(alpha = 0.25f),
+                        modifier = Modifier.testTag("edit_playlists_close_btn")
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Close,
@@ -317,34 +320,26 @@ fun EditPlaylistsDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    var cancelFocused by remember { mutableStateOf(false) }
-                    OutlinedButton(
+                    NextVuOutlinedButton(
                         onClick = onDismiss,
-                        border = BorderStroke(
-                            width = if (cancelFocused) 2.dp else 1.dp,
-                            color = if (cancelFocused) ElectricCyan else SurfaceBorderSubtle
-                        ),
+                        border = BorderStroke(1.dp, SurfaceBorderSubtle),
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
-                            .onFocusChanged { cancelFocused = it.isFocused }
                             .testTag("edit_playlists_cancel_btn")
                     ) {
-                        Text("Cancel", color = if (cancelFocused) ElectricCyan else TextSecondary)
+                        Text("Cancel", color = TextPrimary)
                     }
 
-                    var saveFocused by remember { mutableStateOf(false) }
-                    Button(
+                    NextVuButton(
                         onClick = { onSave(draftSelectedIds) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = ElectricCyan,
                             contentColor = BgCharcoal
                         ),
-                        border = if (saveFocused) BorderStroke(2.dp, TextPrimary) else null,
                         modifier = Modifier
                             .weight(1f)
                             .heightIn(min = 48.dp)
-                            .onFocusChanged { saveFocused = it.isFocused }
                             .testTag("edit_playlists_save_btn")
                     ) {
                         Text(
@@ -367,27 +362,30 @@ private fun PlaylistBulkActionButton(
     testTag: String,
     modifier: Modifier = Modifier
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val hoverState = rememberHoverFocusState()
+    val highlighted = hoverState.isHighlighted
+    val btnShape = RoundedCornerShape(10.dp)
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = btnShape,
         color = when {
-            isFocused -> ElectricCyan.copy(alpha = 0.24f)
+            highlighted -> ElectricCyan.copy(alpha = 0.28f)
             isActive -> ElectricCyan.copy(alpha = 0.14f)
             else -> SurfaceCard
         },
-        border = BorderStroke(
-            width = if (isFocused) 2.dp else 1.dp,
-            color = when {
-                isFocused -> ElectricCyan
-                isActive -> ElectricCyan.copy(alpha = 0.65f)
-                else -> SurfaceBorderSubtle
-            }
+        border = if (highlighted) null else BorderStroke(
+            width = 1.dp,
+            color = if (isActive) ElectricCyan.copy(alpha = 0.65f) else SurfaceBorderSubtle
         ),
         modifier = modifier
             .heightIn(min = 48.dp)
-            .onFocusChanged { isFocused = it.isFocused }
+            .trackHoverFocus(hoverState)
+            .thickBlackHoverOutline(
+                highlighted = highlighted,
+                shape = btnShape,
+                contrastHaloColor = ElectricCyan.copy(alpha = 0.9f)
+            )
             .testTag(testTag)
     ) {
         Row(
@@ -398,7 +396,7 @@ private fun PlaylistBulkActionButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFocused || isActive) ElectricCyan else TextSecondary,
+                tint = if (highlighted || isActive) ElectricCyan else TextSecondary,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -406,7 +404,7 @@ private fun PlaylistBulkActionButton(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isFocused || isActive) ElectricCyan else TextPrimary
+                color = if (highlighted || isActive) ElectricCyan else TextPrimary
             )
         }
     }
