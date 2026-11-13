@@ -46,4 +46,29 @@ class GitHubAppUpdaterTest {
         assertEquals(4, code)
         assertEquals("1.3", name)
     }
+
+    @Test
+    fun `isBranchAheadOfRelease prevents offering stale release APK when branch is newer`() {
+        assertTrue(GitHubAppUpdater.compareVersionNames("1.4", "1.3") > 0)
+        // Branch moved to 1.4 (Build 5) while Release is still at v1.3
+        assertTrue(
+            GitHubAppUpdater.isBranchAheadOfRelease(
+                releaseTag = "v1.3",
+                syncedVersionName = "1.4",
+                syncedVersionCode = 5,
+                installedVersionName = "1.3",
+                installedVersionCode = 4
+            )
+        )
+        // Release v1.4 matches branch 1.4 -> safe to offer v1.4 release APK
+        assertTrue(
+            !GitHubAppUpdater.isBranchAheadOfRelease(
+                releaseTag = "v1.4",
+                syncedVersionName = "1.4",
+                syncedVersionCode = 5,
+                installedVersionName = "1.3",
+                installedVersionCode = 4
+            )
+        )
+    }
 }

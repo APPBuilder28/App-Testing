@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -188,8 +189,8 @@ object GitHubAppUpdater {
             }
 
             val release = (releaseOutcome as? FetchOutcome.Success)?.value
-            val gradleMeta = fetchSyncedGradleVersion(slug)
             val latestCommit = fetchLatestCommit(slug)
+            val gradleMeta = fetchSyncedGradleVersion(slug, latestCommit?.sha)
             val latestWorkflowRun = fetchLatestApkBuildRun(slug)
 
             if (release == null && gradleMeta == null && latestCommit == null) {
@@ -224,8 +225,18 @@ object GitHubAppUpdater {
             val syncedNameNewer = syncedVersionName != null && compareVersionNames(syncedVersionName, installedVersionName) > 0
             val updateAvailable = releaseNewer || syncedCodeNewer || syncedNameNewer
 
+            val branchAheadOfRelease = isBranchAheadOfRelease(
+                releaseTag = releaseTag,
+                syncedVersionName = syncedVersionName,
+                syncedVersionCode = syncedVersionCode,
+                installedVersionName = installedVersionName,
+                installedVersionCode = installedVersionCode
+            )
+
+            val effectiveDirectApkUrl = if (branchAheadOfRelease) null else releaseApkUrl
+
             val sourceLabel = when {
-                releaseNewer || (release != null && !syncedCodeNewer && !syncedNameNewer) -> "GitHub Release"
+                !branchAheadOfRelease && (releaseNewer || release != null) -> "GitHub Release"
                 gradleMeta != null -> "GitHub Synced Branch"
                 else -> "GitHub Repository"
             }
@@ -238,7 +249,7 @@ object GitHubAppUpdater {
             val shortSha = latestCommit?.sha?.take(7)?.takeIf { it.isNotBlank() }
 
             val summary = buildString {
-                if (release != null && release.body.isNotBlank() && (releaseNewer || (!syncedCodeNewer && !syncedNameNewer))) {
+                if (!branchAheadOfRelease && release != null && release.body.isNotBlank()) {
                     append(release.body.trim().take(280))
                 } else if (firstLineCommitMsg.isNotBlank()) {
                     append("Latest commit")
@@ -252,14 +263,14 @@ object GitHubAppUpdater {
             }
 
             val targetUrl = when {
-                releaseNewer && !release?.htmlUrl.isNullOrBlank() -> release!!.htmlUrl
+                !branchAheadOfRelease && !release?.htmlUrl.isNullOrBlank() -> release!!.htmlUrl
                 latestWorkflowRun?.htmlUrl?.isNotBlank() == true -> latestWorkflowRun.htmlUrl
-                release?.htmlUrl?.isNotBlank() == true -> release.htmlUrl
                 latestCommit?.htmlUrl?.isNotBlank() == true -> latestCommit.htmlUrl
+                release?.htmlUrl?.isNotBlank() == true -> release.htmlUrl
                 else -> "https://github.com/$slug/releases"
             }
 
-            val timestamp = release?.publishedAt?.takeIf { it.isNotBlank() }
+            val timestamp = (if (!branchAheadOfRelease) release?.publishedAt?.takeIf { it.isNotBlank() } else null)
                 ?: latestWorkflowRun?.updatedAt?.takeIf { it.isNotBlank() }
                 ?: latestCommit?.commit?.author?.date?.takeIf { it.isNotBlank() }
 
@@ -273,7 +284,7 @@ object GitHubAppUpdater {
                 sourceLabel = sourceLabel,
                 summaryText = summary,
                 releaseOrBuildUrl = targetUrl,
-                directApkAssetUrl = releaseApkUrl,
+                directApkAssetUrl = effectiveDirectApkUrl,
                 latestCommitShaShort = shortSha,
                 publishedOrSyncedAt = timestamp?.take(10)
             )
@@ -288,6 +299,22 @@ object GitHubAppUpdater {
         }
     }
 
+    internal fun isBranchAheadOfRelease(
+        releaseTag: String,
+        syncedVersionName: String?,
+        syncedVersionCode: Int?,
+        installedVersionName: String,
+        installedVersionCode: Int
+    ): Boolean {
+        if (releaseTag.isBlank()) return true
+        val branchNameAheadOfRelease = !syncedVersionName.isNullOrBlank() &&
+            compareVersionNames(syncedVersionName, releaseTag) > 0
+        val branchCodeAheadWhileSameTag = syncedVersionCode != null &&
+            syncedVersionCode > installedVersionCode &&
+            compareVersionNames(releaseTag, installedVersionName) <= 0
+        return branchNameAheadOfRelease || branchCodeAheadWhileSameTag
+    }
+
     private sealed interface FetchOutcome<out T> {
         data class Success<T>(val value: T) : FetchOutcome<T>
         data class HttpError(val code: Int) : FetchOutcome<Nothing>
@@ -297,6 +324,7 @@ object GitHubAppUpdater {
     private fun fetchLatestRelease(slug: String): FetchOutcome<GitHubLatestReleaseDto> {
         val req = Request.Builder()
             .url("https://api.github.com/repos/$slug/releases/latest")
+            .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "NextVuPlayer-Android")
             .build()
@@ -306,6 +334,7 @@ object GitHubAppUpdater {
     private fun fetchLatestCommit(slug: String): GitHubCommitItemDto? {
         val req = Request.Builder()
             .url("https://api.github.com/repos/$slug/commits?per_page=1")
+            .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "NextVuPlayer-Android")
             .build()
@@ -317,7 +346,8 @@ object GitHubAppUpdater {
 
     private fun fetchLatestApkBuildRun(slug: String): GitHubWorkflowRunDto? {
         val req = Request.Builder()
-            .url("https://api.github.com/repos/$slug/actions/workflows/build-apk.yml/runs?per_page=1&status=completed")
+            .url("https://api.github.com/repos/$slug/actions/workflows/build-apk.yml/runs?per_page=1")
+            .cacheControl(CacheControl.FORCE_NETWORK)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "NextVuPlayer-Android")
             .build()
@@ -327,11 +357,17 @@ object GitHubAppUpdater {
         }
     }
 
-    private fun fetchSyncedGradleVersion(slug: String): Pair<Int?, String?>? {
-        val branches = listOf("HEAD", "main", "master")
-        for (branch in branches) {
+    private fun fetchSyncedGradleVersion(slug: String, commitSha: String?): Pair<Int?, String?>? {
+        val refs = buildList {
+            if (!commitSha.isNullOrBlank()) add(commitSha)
+            add("HEAD")
+            add("main")
+            add("master")
+        }.distinct()
+        for (ref in refs) {
             val req = Request.Builder()
-                .url("https://raw.githubusercontent.com/$slug/$branch/app/build.gradle.kts")
+                .url("https://raw.githubusercontent.com/$slug/$ref/app/build.gradle.kts")
+                .cacheControl(CacheControl.FORCE_NETWORK)
                 .header("User-Agent", "NextVuPlayer-Android")
                 .build()
             try {
