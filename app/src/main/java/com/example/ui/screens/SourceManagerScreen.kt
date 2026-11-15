@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Edit
@@ -133,6 +134,7 @@ fun SourceManagerScreen(
     val strings = LocalAppStrings.current
     var showAddEditDialog by remember { mutableStateOf(openAddDialogInitially) }
     var editingSource by remember { mutableStateOf<XtreamSourceProfile?>(null) }
+    var duplicateTemplate by remember { mutableStateOf<XtreamSourceProfile?>(null) }
     var confirmSwitchTarget by remember { mutableStateOf<XtreamSourceProfile?>(null) }
     var contextMenuTarget by remember { mutableStateOf<XtreamSourceProfile?>(null) }
     var renameTarget by remember { mutableStateOf<XtreamSourceProfile?>(null) }
@@ -232,6 +234,7 @@ fun SourceManagerScreen(
                         actionLabel = strings.addNewSource,
                         onAction = {
                             editingSource = null
+                            duplicateTemplate = null
                             onResetTestState()
                             showAddEditDialog = true
                         }
@@ -253,6 +256,12 @@ fun SourceManagerScreen(
                                     }
                                 },
                                 onLongClick = { contextMenuTarget = source },
+                                onDuplicateClick = {
+                                    editingSource = null
+                                    duplicateTemplate = source
+                                    onResetTestState()
+                                    showAddEditDialog = true
+                                },
                                 onMenuClick = { contextMenuTarget = source }
                             )
                         }
@@ -262,6 +271,7 @@ fun SourceManagerScreen(
                 NextVuFloatingActionButton(
                     onClick = {
                         editingSource = null
+                        duplicateTemplate = null
                         onResetTestState()
                         showAddEditDialog = true
                     },
@@ -363,6 +373,7 @@ fun SourceManagerScreen(
                         onClick = {
                             contextMenuTarget = null
                             editingSource = target
+                            duplicateTemplate = null
                             onResetTestState()
                             showAddEditDialog = true
                         },
@@ -374,6 +385,25 @@ fun SourceManagerScreen(
                         Icon(Icons.Rounded.Dns, contentDescription = null, tint = ElectricCyan)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(strings.editCredentials, color = TextPrimary)
+                    }
+
+                    NextVuOutlinedButton(
+                        onClick = {
+                            contextMenuTarget = null
+                            editingSource = null
+                            duplicateTemplate = target
+                            onResetTestState()
+                            showAddEditDialog = true
+                        },
+                        border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.55f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .testTag("action_duplicate_source")
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, tint = ElectricCyan)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Duplicate Source (Keep Login)", color = ElectricCyan)
                     }
 
                     NextVuOutlinedButton(
@@ -471,6 +501,8 @@ fun SourceManagerScreen(
     if (showAddEditDialog) {
         AddOrEditSourceDialog(
             existing = editingSource,
+            duplicateFrom = duplicateTemplate,
+            existingSourceNames = sources.map { it.sourceName }.toSet(),
             testConnectionState = testConnectionState,
             onTestConnection = onTestConnection,
             onSave = { name, url, user, pass, makeActive ->
@@ -478,6 +510,7 @@ fun SourceManagerScreen(
                 onSaveSource(editingSource?.id, name, url, user, pass, makeActive) {
                     showAddEditDialog = false
                     editingSource = null
+                    duplicateTemplate = null
                     if (wasFirstSource) {
                         onSourceReadyNavigateHome()
                     }
@@ -486,6 +519,7 @@ fun SourceManagerScreen(
             onDismiss = {
                 showAddEditDialog = false
                 editingSource = null
+                duplicateTemplate = null
                 onResetTestState()
             }
         )
@@ -498,6 +532,7 @@ private fun SourceProfileCard(
     isActive: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onDuplicateClick: () -> Unit,
     onMenuClick: () -> Unit
 ) {
     val strings = LocalAppStrings.current
@@ -584,35 +619,73 @@ private fun SourceProfileCard(
                 }
             }
 
-            NextVuIconButton(
-                onClick = onMenuClick,
-                modifier = Modifier.testTag("source_menu_${source.id}")
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.MoreVert,
-                    contentDescription = "Source options",
-                    tint = TextSecondary
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NextVuIconButton(
+                    onClick = onDuplicateClick,
+                    modifier = Modifier.testTag("duplicate_source_${source.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ContentCopy,
+                        contentDescription = "Duplicate ${source.sourceName}",
+                        tint = ElectricCyan
+                    )
+                }
+
+                NextVuIconButton(
+                    onClick = onMenuClick,
+                    modifier = Modifier.testTag("source_menu_${source.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Source options",
+                        tint = TextSecondary
+                    )
+                }
             }
         }
+    }
+}
+
+private fun nextDuplicateSourceName(baseName: String, existingNames: Set<String>): String {
+    val cleanBase = baseName.trim().ifBlank { "Xtream Source" }
+    val firstCandidate = "$cleanBase (Copy)"
+    if (firstCandidate !in existingNames) return firstCandidate
+    var index = 2
+    while (true) {
+        val candidate = "$cleanBase (Copy $index)"
+        if (candidate !in existingNames) return candidate
+        index++
     }
 }
 
 @Composable
 private fun AddOrEditSourceDialog(
     existing: XtreamSourceProfile?,
+    duplicateFrom: XtreamSourceProfile?,
+    existingSourceNames: Set<String>,
     testConnectionState: TestConnectionUiState,
     onTestConnection: (String, String, String) -> Unit,
     onSave: (String, String, String, String, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val strings = LocalAppStrings.current
-    var sourceName by remember { mutableStateOf(existing?.sourceName ?: "") }
-    var serverUrl by remember { mutableStateOf(existing?.serverUrl ?: "") }
-    var username by remember { mutableStateOf(existing?.username ?: "") }
-    var password by remember { mutableStateOf(existing?.password ?: "") }
+    val isDuplicating = existing == null && duplicateFrom != null
+    val template = existing ?: duplicateFrom
+    val initialName = remember(existing?.id, duplicateFrom?.id, existingSourceNames) {
+        when {
+            existing != null -> existing.sourceName
+            duplicateFrom != null -> nextDuplicateSourceName(duplicateFrom.sourceName, existingSourceNames)
+            else -> ""
+        }
+    }
+    var sourceName by remember(existing?.id, duplicateFrom?.id) { mutableStateOf(initialName) }
+    var serverUrl by remember(existing?.id, duplicateFrom?.id) { mutableStateOf(template?.serverUrl ?: "") }
+    var username by remember(existing?.id, duplicateFrom?.id) { mutableStateOf(template?.username ?: "") }
+    var password by remember(existing?.id, duplicateFrom?.id) { mutableStateOf(template?.password ?: "") }
     var showPassword by remember { mutableStateOf(false) }
-    var makeActive by remember { mutableStateOf(existing?.isActive ?: true) }
+    var makeActive by remember(existing?.id, duplicateFrom?.id) {
+        mutableStateOf(existing?.isActive ?: !isDuplicating)
+    }
 
     // Horizontal shake animation on Test Connection error
     val shakeOffset = remember { Animatable(0f) }
@@ -642,10 +715,22 @@ private fun AddOrEditSourceDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = if (existing == null) strings.addNewSource else strings.editSource,
+                    text = when {
+                        isDuplicating -> "Duplicate Source"
+                        existing != null -> strings.editSource
+                        else -> strings.addNewSource
+                    },
                     style = MaterialTheme.typography.headlineSmall,
                     color = TextPrimary
                 )
+
+                if (isDuplicating) {
+                    Text(
+                        text = "Login credentials copied from ${duplicateFrom?.sourceName}. Change the server link & name, then test or save.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ElectricCyan
+                    )
+                }
 
                 OutlinedTextField(
                     value = sourceName,
